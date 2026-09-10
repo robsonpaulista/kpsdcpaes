@@ -1,0 +1,222 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * Factory OS — Doc 04 §71 / Doc 11 §22–25.
+     *
+     * Corporativo + papel em factory_users (não é só esconder botão).
+     * Escrita alinhada às capabilities de src/domain/access/roles.ts
+     * (espelhadas por papel — sem Custom Claims nesta V1).
+     *
+     * ATENÇÃO (Firebase compartilhado):
+     * - Deploy deste arquivo SUBSTITUI as rules do projeto inteiro.
+     * - Se já existir app no mesmo projeto, MESCLE apenas o bloco
+     *   "FACTORY OS" nas rules atuais.
+     */
+
+    function isCorporateUser() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function isTempAdminAuth() {
+      return isCorporateUser()
+        && request.auth.token.email == 'admin@dcpaes.dev';
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/factory_users/$(request.auth.uid);
+    }
+
+    function hasActiveProfile() {
+      return isCorporateUser()
+        && exists(userPath())
+        && get(userPath()).data.active == true;
+    }
+
+    function role() {
+      return get(userPath()).data.role;
+    }
+
+    function isAdmin() {
+      return hasActiveProfile() && role() == 'ADMIN';
+    }
+
+    /** executeFloor — chão / workflow */
+    function canExecuteFloor() {
+      return hasActiveProfile()
+        && role() in ['ADMIN', 'MANAGER', 'SUPERVISOR', 'OPERATOR'];
+    }
+
+    /** releaseOrder — liberar OP / lotes iniciais */
+    function canReleaseOrder() {
+      return hasActiveProfile()
+        && role() in ['ADMIN', 'MANAGER', 'SUPERVISOR', 'PCP'];
+    }
+
+    /** manageQuality — ocorrências + bloqueio/liberação de lote */
+    function canManageQuality() {
+      return hasActiveProfile()
+        && role() in ['ADMIN', 'MANAGER', 'SUPERVISOR', 'QUALITY'];
+    }
+
+    /** manageEquipment — cadastro / status operacional de equipamento */
+    function canManageEquipment() {
+      return hasActiveProfile()
+        && role() in ['ADMIN', 'MANAGER'];
+    }
+
+    /** manageLossReasons */
+    function canManageLossReasons() {
+      return hasActiveProfile()
+        && role() in ['ADMIN', 'MANAGER'];
+    }
+
+    /** manageCatalog — produtos e mapeamentos */
+    function canManageCatalog() {
+      return hasActiveProfile()
+        && role() in ['ADMIN', 'MANAGER', 'PCP'];
+    }
+
+    /** syncIntegration — só ADMIN nesta V1 */
+    function canSyncIntegration() {
+      return isAdmin();
+    }
+
+    function isFactoryCollection(name) {
+      return name.matches('factory_.*') && name != 'factory_users';
+    }
+
+    // === INÍCIO BLOCO FACTORY OS ===
+
+    /**
+     * Perfis — bootstrap do próprio uid; troca de papel = ADMIN.
+     */
+    match /factory_users/{uid} {
+      allow read: if isCorporateUser()
+        && (request.auth.uid == uid || hasActiveProfile());
+
+      allow create: if isCorporateUser()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.active == true
+        && (
+          (request.resource.data.role == 'VIEWER'
+            && request.resource.data.roleIds.size() == 1
+            && request.resource.data.roleIds[0] == 'VIEWER')
+          || (isTempAdminAuth()
+            && request.resource.data.role == 'ADMIN'
+            && request.resource.data.roleIds.size() == 1
+            && request.resource.data.roleIds[0] == 'ADMIN')
+        );
+
+      allow update: if isCorporateUser() && (
+        isAdmin()
+        || (
+          request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.roleIds == resource.data.roleIds
+          && request.resource.data.active == resource.data.active
+        )
+        || (
+          isTempAdminAuth()
+          && request.auth.uid == uid
+          && request.resource.data.role == 'ADMIN'
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    /** OPs — sync + liberação + atualização de status no workflow do chão */
+    match /factory_production_orders/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canReleaseOrder()
+        || canExecuteFloor()
+        || canSyncIntegration();
+    }
+
+    /** Lotes — liberação, execução e bloqueio/liberação qualidade */
+    match /factory_production_lots/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canReleaseOrder()
+        || canExecuteFloor()
+        || canManageQuality();
+    }
+
+    /** Etapas — execução no Floor */
+    match /factory_lot_step_runs/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canExecuteFloor();
+    }
+
+    /** Eventos — append operacional (chão, liberação, qualidade) */
+    match /factory_production_events/{docId} {
+      allow read: if hasActiveProfile();
+      allow create: if canExecuteFloor()
+        || canReleaseOrder()
+        || canManageQuality();
+      allow update, delete: if isAdmin();
+    }
+
+    /** Ocorrências de qualidade — create no chão (Doc 07); gestão = QUALITY+ */
+    match /factory_quality_incidents/{docId} {
+      allow read: if hasActiveProfile();
+      allow create: if canExecuteFloor() || canManageQuality();
+      allow update, delete: if canManageQuality();
+    }
+
+    /** Equipamentos */
+    match /factory_equipment/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canManageEquipment();
+    }
+
+    /** Motivos de perda (catálogo) */
+    match /factory_loss_reasons/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canManageLossReasons();
+    }
+
+    /** Produtos */
+    match /factory_products/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canManageCatalog();
+    }
+
+    /** Mapeamento produto externo → interno */
+    match /factory_product_mappings/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canManageCatalog() || canSyncIntegration();
+    }
+
+    /** Integração — estado e runs */
+    match /factory_integration_state/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canSyncIntegration();
+    }
+
+    match /factory_integration_runs/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canSyncIntegration();
+    }
+
+    /**
+     * Demais factory_* (coleções futuras) — leitura com perfil;
+     * escrita só ADMIN até mapear capability.
+     */
+    match /{collection}/{docId} {
+      allow read: if isFactoryCollection(collection) && hasActiveProfile();
+      allow write: if isFactoryCollection(collection) && isAdmin();
+    }
+
+    match /{collection}/{docId}/{document=**} {
+      allow read: if isFactoryCollection(collection) && hasActiveProfile();
+      allow write: if isFactoryCollection(collection) && isAdmin();
+    }
+
+    // === FIM BLOCO FACTORY OS ===
+  }
+}
