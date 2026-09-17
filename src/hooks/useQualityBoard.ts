@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFactoryLiveReload } from "@/hooks/useFactoryLiveReload";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
+import { listProductionOrders } from "@/repositories/orders.repository";
 import { listProducts } from "@/repositories/products.repository";
 import { listQualityIncidents } from "@/repositories/quality.repository";
 import {
@@ -11,7 +12,7 @@ import {
   releaseBlockedLot,
   resolveQualityIncident,
 } from "@/services/quality.service";
-import type { StepType } from "@/types/production";
+import type { Product, StepType } from "@/types/production";
 import type { QualityIncident, QualityLossSignal } from "@/types/quality";
 
 export type CreateIncidentInput = {
@@ -27,7 +28,9 @@ export type CreateIncidentInput = {
 export function useQualityBoard() {
   const [incidents, setIncidents] = useState<QualityIncident[]>([]);
   const [signals, setSignals] = useState<QualityLossSignal[]>([]);
+  const [catalog, setCatalog] = useState<Product[]>([]);
   const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [orderNumbers, setOrderNumbers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,16 +41,25 @@ export function useQualityBoard() {
     try {
       if (!isFirebaseConfigured()) throw new Error("Firebase não configurado.");
       const db = getFirestoreDb();
-      const [list, products, lossSignals] = await Promise.all([
+      const [list, products, lossSignals, orders] = await Promise.all([
         listQualityIncidents(db),
         listProducts(db),
         listQualityLossSignals(db),
+        listProductionOrders(db),
       ]);
       setIncidents(list);
       setSignals(lossSignals);
+      setCatalog(
+        products
+          .filter((p) => p.active)
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+      );
       const names: Record<string, string> = {};
       for (const p of products) names[p.id] = p.name;
       setProductNames(names);
+      const nums: Record<string, string> = {};
+      for (const o of orders) nums[o.id] = o.externalOrderNumber;
+      setOrderNumbers(nums);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar");
       if (!opts?.silent) {
@@ -88,12 +100,12 @@ export function useQualityBoard() {
     }
   }
 
-  async function resolveIncident(id: string) {
+  async function resolveIncident(id: string, resolutionNote: string) {
     setBusy(true);
     setError(null);
     try {
       const db = getFirestoreDb();
-      await resolveQualityIncident(db, id);
+      await resolveQualityIncident(db, id, resolutionNote);
       await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao resolver");
@@ -122,7 +134,9 @@ export function useQualityBoard() {
     pendingSignals,
     openCount,
     blockedOpen,
+    catalog,
     productNames,
+    orderNumbers,
     loading,
     error,
     setError,

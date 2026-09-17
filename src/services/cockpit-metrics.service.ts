@@ -12,7 +12,7 @@ import {
 } from "@/domain/production/stations";
 import { listEquipment } from "@/repositories/equipment.repository";
 import { getIntegrationState } from "@/repositories/integration.repository";
-import { getLotById, listActiveLots, listCompletedLots } from "@/repositories/lots.repository";
+import { getLotById, listActiveLots, listBlockedLots, listCompletedLots } from "@/repositories/lots.repository";
 import { listProductionOrders } from "@/repositories/orders.repository";
 import { listProducts } from "@/repositories/products.repository";
 import { listQualityIncidents } from "@/repositories/quality.repository";
@@ -294,6 +294,7 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
 
   const [
     activeLots,
+    blockedLotsList,
     openSteps,
     lossSteps,
     completedSteps,
@@ -306,6 +307,7 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
     integrationState,
   ] = await Promise.all([
     listActiveLots(db),
+    listBlockedLots(db),
     listOpenStepRuns(db),
     listStepRunsWithLoss(db),
     listCompletedStepRuns(db),
@@ -317,6 +319,8 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
     listQualityIncidents(db),
     getIntegrationState(db, sourceSystem),
   ]);
+
+  const floorLots = [...activeLots, ...blockedLotsList];
 
   const productNames: Record<string, string> = {};
   const productImages: Record<string, string | null> = {};
@@ -385,7 +389,7 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
   const attention: AttentionItem[] = [];
   const productionLots: ProductionLotSummary[] = [];
 
-  for (const lot of activeLots) {
+  for (const lot of floorLots) {
     const timing = timingForLot(lot, openSteps);
     const productName = productNames[lot.productId] ?? lot.productId;
     const activeStep = pickActiveStep(lot.id, openSteps);
@@ -575,7 +579,7 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
   const readyLots = activeLots.filter(
     (l) => l.currentStepStatus === "READY",
   ).length;
-  const blockedLots = activeLots.filter((l) => l.status === "BLOCKED").length;
+  const blockedLots = blockedLotsList.length;
 
   const waitingReleaseOrders = orders.filter(
     (o) =>

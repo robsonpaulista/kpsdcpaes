@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessDeniedNote } from "@/components/access/AccessDeniedNote";
+import { ProductionListFiltersPanel } from "@/components/cockpit/ProductionListFilters";
 import { CockpitPageHeader } from "@/components/shared/CockpitUi";
 import {
   Alert,
@@ -18,6 +19,12 @@ import {
 import { stepTypeLabel } from "@/domain/production/process-route";
 import { useFactoryRole } from "@/hooks/useFactoryRole";
 import { useQualityBoard } from "@/hooks/useQualityBoard";
+import {
+  EMPTY_PRODUCTION_FILTERS,
+  hasActiveProductionFilters,
+  inPeriod,
+  type ProductionListFilters,
+} from "@/lib/production/list-filters";
 import type { StepType } from "@/types/production";
 
 /** Ocorrências (Doc 02 `/app/quality/incidents`). Prefill via query da fila de perdas. */
@@ -28,7 +35,9 @@ export function QualityIncidentsClient() {
   const formRef = useRef<HTMLFormElement>(null);
   const {
     incidents,
+    catalog,
     productNames,
+    orderNumbers,
     loading,
     error,
     setError,
@@ -47,6 +56,12 @@ export function QualityIncidentsClient() {
   const [relatedStepType, setRelatedStepType] = useState<StepType | undefined>();
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [releaseNotes, setReleaseNotes] = useState<Record<string, string>>({});
+  const [resolutionNotes, setResolutionNotes] = useState<Record<string, string>>(
+    {},
+  );
+  const [filters, setFilters] = useState<ProductionListFilters>(
+    EMPTY_PRODUCTION_FILTERS,
+  );
   const [prefillDone, setPrefillDone] = useState(false);
 
   useEffect(() => {
@@ -116,14 +131,41 @@ export function QualityIncidentsClient() {
     }
   }
 
+  const visible = useMemo(() => {
+    const lotQ = filters.lotQuery.trim().toUpperCase();
+    const opQ = filters.opQuery.trim().toUpperCase();
+
+    return incidents.filter((incident) => {
+      if (!inPeriod(incident.createdAt, filters.dateFrom, filters.dateTo)) {
+        return false;
+      }
+      if (filters.productId && incident.productId !== filters.productId) {
+        return false;
+      }
+      if (lotQ && !incident.lotCode.toUpperCase().includes(lotQ)) {
+        return false;
+      }
+      if (opQ) {
+        const op = (
+          orderNumbers[incident.productionOrderId] ??
+          incident.productionOrderId
+        ).toUpperCase();
+        if (!op.includes(opQ)) return false;
+      }
+      return true;
+    });
+  }, [incidents, filters, orderNumbers]);
+
+  const filtersActive = hasActiveProductionFilters(filters);
   const openCount = incidents.filter((i) => i.status === "OPEN").length;
+  const openVisible = visible.filter((i) => i.status === "OPEN").length;
 
   return (
     <div className="space-y-6">
       <CockpitPageHeader
         eyebrow="Qualidade"
         title="Ocorrências"
-        description="Registro do setor de qualidade. Bloqueio de lote é ação explícita."
+        description="Registro do setor de qualidade. Bloquear lote é ação explícita e distinta do registro."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button href="/app/quality/losses" variant="secondary" size="sm">
@@ -207,7 +249,7 @@ export function QualityIncidentsClient() {
               onChange={(e) => setBlockLot(e.target.checked)}
               className="h-4 w-4 accent-[var(--accent)]"
             />
-            Bloquear lote agora (ação explícita)
+            Bloquear lote agora (ação explícita — impede apontamento no chão)
           </label>
           <Button
             type="submit"
@@ -223,6 +265,20 @@ export function QualityIncidentsClient() {
 
       <section className="space-y-3">
         <p className="dc-eyebrow">Lista</p>
+
+        <ProductionListFiltersPanel
+          filters={filters}
+          onChange={setFilters}
+          catalog={catalog}
+          resultLabel={
+            loading
+              ? undefined
+              : `${visible.length} ocorrência${visible.length === 1 ? "" : "s"}${
+                  openVisible > 0 ? ` · ${openVisible} aberta(s)` : ""
+                }${filtersActive ? " (filtrado)" : ""}`
+          }
+        />
+
         {loading ? (
           <p className="text-sm text-[var(--ink-2)]">Carregando…</p>
         ) : incidents.length === 0 ? (
@@ -233,9 +289,22 @@ export function QualityIncidentsClient() {
               <Button href="/app/quality/losses">Ver fila de perdas →</Button>
             }
           />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            title="Nenhuma ocorrência neste filtro"
+            detail="Ajuste ou limpe os filtros."
+            action={
+              <Button
+                variant="secondary"
+                onClick={() => setFilters(EMPTY_PRODUCTION_FILTERS)}
+              >
+                Limpar filtros
+              </Button>
+            }
+          />
         ) : (
           <ul className="space-y-3">
-            {incidents.map((incident) => (
+            {visible.map((incident) => (
               <li key={incident.id}>
                 <Card className="px-5 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -248,6 +317,9 @@ export function QualityIncidentsClient() {
                       </Link>
                       <p className="mt-0.5 text-xs text-[var(--ink-2)]">
                         {productNames[incident.productId] ?? incident.productId}
+                        {orderNumbers[incident.productionOrderId]
+                          ? ` · OP ${orderNumbers[incident.productionOrderId]}`
+                          : ""}
                         {incident.stepType
                           ? ` · ${stepTypeLabel(incident.stepType as StepType)}`
                           : ""}
@@ -275,49 +347,88 @@ export function QualityIncidentsClient() {
                   <p className="mt-1 text-[11px] text-[var(--muted)]">
                     {new Date(incident.createdAt).toLocaleString("pt-BR")}
                   </p>
-
-                  {incident.status === "OPEN" && canManage ? (
-                    <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => void resolveIncident(incident.id)}
-                      >
-                        Marcar resolvida
-                      </Button>
-                    </div>
+                  {incident.status === "RESOLVED" && incident.resolutionNote ? (
+                    <p className="mt-2 rounded-[10px] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink-2)]">
+                      <span className="font-semibold text-[var(--ink)]">
+                        Solução:{" "}
+                      </span>
+                      {incident.resolutionNote}
+                    </p>
                   ) : null}
 
-                  {incident.blocksLot &&
-                  incident.status === "OPEN" &&
-                  canManage ? (
+                  {incident.status === "OPEN" && canManage ? (
                     <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
-                      <label className="block text-xs text-[var(--muted)]">
-                        Motivo da liberação do lote
-                        <Input
-                          value={releaseNotes[incident.lotId] ?? ""}
-                          onChange={(e) =>
-                            setReleaseNotes((prev) => ({
-                              ...prev,
-                              [incident.lotId]: e.target.value,
-                            }))
-                          }
-                          className="mt-1"
-                        />
-                      </label>
-                      <Button
-                        size="sm"
-                        disabled={busy}
-                        onClick={() =>
-                          void releaseLot(
-                            incident.lotId,
-                            releaseNotes[incident.lotId] ?? "",
-                          )
-                        }
-                      >
-                        Liberar lote
-                      </Button>
+                      {incident.blocksLot ? (
+                        <>
+                          <p className="text-xs text-[var(--ink-2)]">
+                            Lote bloqueado no chão. Liberar desbloqueia e fecha
+                            esta ocorrência (ação auditável).
+                          </p>
+                          <label className="block text-xs text-[var(--muted)]">
+                            Motivo da liberação do lote
+                            <Input
+                              value={releaseNotes[incident.lotId] ?? ""}
+                              onChange={(e) =>
+                                setReleaseNotes((prev) => ({
+                                  ...prev,
+                                  [incident.lotId]: e.target.value,
+                                }))
+                              }
+                              className="mt-1"
+                              placeholder="Ex.: retrabalho concluído / liberado por QA"
+                            />
+                          </label>
+                          <Button
+                            size="sm"
+                            disabled={
+                              busy ||
+                              !(releaseNotes[incident.lotId] ?? "").trim()
+                            }
+                            onClick={() =>
+                              void releaseLot(
+                                incident.lotId,
+                                releaseNotes[incident.lotId] ?? "",
+                              )
+                            }
+                          >
+                            Liberar lote
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <label className="block text-xs text-[var(--muted)]">
+                            Solução / o que foi resolvido
+                            <Textarea
+                              value={resolutionNotes[incident.id] ?? ""}
+                              onChange={(e) =>
+                                setResolutionNotes((prev) => ({
+                                  ...prev,
+                                  [incident.id]: e.target.value,
+                                }))
+                              }
+                              rows={2}
+                              className="mt-1"
+                              placeholder="Descreva a solução aplicada…"
+                            />
+                          </label>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={
+                              busy ||
+                              !(resolutionNotes[incident.id] ?? "").trim()
+                            }
+                            onClick={() =>
+                              void resolveIncident(
+                                incident.id,
+                                resolutionNotes[incident.id] ?? "",
+                              )
+                            }
+                          >
+                            Marcar resolvida
+                          </Button>
+                        </>
+                      )}
                     </div>
                   ) : null}
                 </Card>

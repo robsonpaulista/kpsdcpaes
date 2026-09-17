@@ -138,7 +138,7 @@ export function ProductionKanban() {
           {columns.map((col) => (
             <section
               key={col.stepType}
-              className="w-[220px] shrink-0 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3 lg:w-[240px]"
+              className="w-[220px] shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3 lg:w-[240px]"
             >
               <header>
                 <div className="flex items-baseline justify-between gap-2">
@@ -190,23 +190,24 @@ export function ProductionKanban() {
                       <li key={lot.id}>
                         <Link
                           href={`/app/cockpit/production/lots/${lot.id}`}
-                          className="flex gap-2.5 rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 transition-[background-color,border-color] duration-150 hover:border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] hover:bg-[var(--accent-bg)]"
+                          className="flex min-w-0 gap-2.5 overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 transition-[background-color,border-color] duration-150 hover:border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] hover:bg-[var(--accent-bg)]"
                         >
                           <ProductThumbnail
                             imageUrl={productImages[lot.productId]}
                             alt={productName}
                             size="sm"
+                            className="shrink-0"
                           />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold leading-snug text-[var(--ink)]">
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <p className="truncate text-sm font-semibold leading-snug text-[var(--ink)]">
                               {productName}
                             </p>
-                            <p className="mt-1 font-mono text-xs tabular-nums text-[var(--ink-2)]">
+                            <p className="mt-1 truncate font-mono text-xs tabular-nums text-[var(--ink-2)]">
                               {lot.lotCode}
                             </p>
                             {timerLine ? (
                               <p
-                                className={`mt-2 font-mono text-xl font-bold tabular-nums tracking-tight ${timerClass}`}
+                                className={`mt-2 truncate font-mono text-base font-bold tabular-nums tracking-tight sm:text-lg ${timerClass}`}
                               >
                                 {timerLine}
                               </p>

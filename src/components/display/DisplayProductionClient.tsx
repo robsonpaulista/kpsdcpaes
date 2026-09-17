@@ -57,20 +57,6 @@ function toneBorder(status: TimingStatus | null | "READY_HANDOFF"): string {
   }
 }
 
-function shortStepLabel(stepType: StepType): string {
-  const map: Partial<Record<StepType, string>> = {
-    WEIGHING: "PESAG.",
-    MIXING: "AMASS.",
-    MODELING: "MODEL.",
-    TRAYING: "BANDEJ.",
-    PROOFING: "FERMENT.",
-    BAKING: "FORNO",
-    COOLING: "RESFR.",
-    PACKAGING: "EMBAL.",
-  };
-  return map[stepType] ?? stepTypeLabel(stepType).toUpperCase().slice(0, 8);
-}
-
 type AttentionRow = {
   lotId: string;
   lotCode: string;
@@ -285,10 +271,6 @@ export function DisplayProductionClient() {
     return () => window.clearInterval(id);
   }, [liveStats.attentionRows.length]);
 
-  const stepCountStrip = columns
-    .map((col) => `${shortStepLabel(col.stepType as StepType)} ${col.lots.length}`)
-    .join(" · ");
-
   return (
     <main className="display-shell flex flex-col px-6 py-7 lg:px-12 lg:py-10">
       <header className="flex flex-wrap items-end justify-between gap-6">
@@ -338,9 +320,6 @@ export function DisplayProductionClient() {
                 handoff(s)
               </>
             ) : null}
-          </p>
-          <p className="mt-4 max-w-5xl text-base font-medium tracking-wide text-white/35 lg:text-lg">
-            {stepCountStrip || "Sem fluxo ativo"}
           </p>
         </div>
         <div className="text-right">
@@ -569,29 +548,29 @@ export function DisplayProductionClient() {
                               key={lot.id}
                               className={`display-lot ${toneBorder(timing)}`}
                             >
-                              <div className="flex items-start gap-3">
+                              <div className="flex min-w-0 items-start gap-3">
                                 <ProductThumbnail
                                   imageUrl={productImages[lot.productId]}
                                   alt={productNames[lot.productId] ?? lot.productId}
                                   size="sm"
-                                  className="!rounded-[10px] border-white/15"
+                                  className="!rounded-[10px] shrink-0 border-white/15"
                                 />
-                                <div className="min-w-0 flex-1">
-                              <p className="text-base font-semibold leading-snug text-white lg:text-lg">
-                                {productNames[lot.productId] ?? lot.productId}
-                              </p>
-                              <p className="mt-1 text-sm tabular-nums text-white/50">
-                                {lot.lotCode}
-                              </p>
-                              {timer ? (
-                                <p className="display-timer">{timer}</p>
-                              ) : (
-                                <p className="mt-3 text-sm text-white/35">
-                                  {step?.status === "READY"
-                                    ? "Aguardando início"
-                                    : "—"}
-                                </p>
-                              )}
+                                <div className="min-w-0 flex-1 overflow-hidden">
+                                  <p className="truncate text-base font-semibold leading-snug text-white">
+                                    {productNames[lot.productId] ?? lot.productId}
+                                  </p>
+                                  <p className="mt-1 truncate text-sm tabular-nums text-white/50">
+                                    {lot.lotCode}
+                                  </p>
+                                  {timer ? (
+                                    <p className="display-timer">{timer}</p>
+                                  ) : (
+                                    <p className="mt-3 text-sm text-white/35">
+                                      {step?.status === "READY"
+                                        ? "Aguardando início"
+                                        : "—"}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             </li>

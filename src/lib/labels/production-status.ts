@@ -91,11 +91,12 @@ export function timingStatusLabel(status: TimingStatus): string {
   }
 }
 
-/** Rótulo curto para lista/kanban (etapa ou lote). */
+/** Rótulo curto para lista/kanban (etapa ou lote). Bloqueio do lote tem prioridade. */
 export function executionStatusLabel(
   stepStatus?: StepStatus | null,
   lotStatus?: LotStatus | null,
 ): string {
+  if (lotStatus === "BLOCKED") return lotStatusLabel("BLOCKED");
   if (stepStatus) return stepStatusLabel(stepStatus);
   if (lotStatus) return lotStatusLabel(lotStatus);
   return "—";

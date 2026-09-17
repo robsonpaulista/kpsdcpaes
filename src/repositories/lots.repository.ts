@@ -75,6 +75,17 @@ export async function listActiveLots(
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+/** Lotes bloqueados por qualidade (fora do fluxo ativo, mas ainda na fábrica). */
+export async function listBlockedLots(
+  db: Firestore,
+): Promise<ProductionLot[]> {
+  const snap = await getDocs(lotsCol(db));
+  return snap.docs
+    .map((d) => d.data() as ProductionLot)
+    .filter((lot) => lot.status === "BLOCKED")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
 /** Lotes concluídos (mais recentes primeiro). */
 export async function listCompletedLots(
   db: Firestore,

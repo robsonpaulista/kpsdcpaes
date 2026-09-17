@@ -748,15 +748,19 @@ textarea:focus {
 .display-col {
   display: flex;
   width: 240px;
+  min-width: 0;
   flex-shrink: 0;
   flex-direction: column;
   border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--surface) 8%, transparent);
   background: color-mix(in srgb, var(--surface) 3.5%, transparent);
   padding: 1rem;
+  overflow: hidden;
 }
 
 .display-lot {
+  min-width: 0;
+  overflow: hidden;
   border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--surface) 8%, transparent);
   padding: 0.85rem 0.9rem;
@@ -764,10 +768,15 @@ textarea:focus {
 
 .display-timer {
   margin-top: 0.65rem;
-  font-size: clamp(28px, 3vw, 40px);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(1.125rem, 1.6vw, 1.5rem);
   font-weight: 700;
-  letter-spacing: -0.04em;
-  line-height: 1;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {

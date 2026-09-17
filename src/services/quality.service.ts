@@ -161,16 +161,24 @@ export async function createQualityIncident(
   return { incident, lotBlocked };
 }
 
-export async function resolveQualityIncident(
-  db: Firestore,
-  incidentId: string,
-  resolutionNote?: string,
-): Promise<QualityIncident> {
-  const existing = await getQualityIncident(db, incidentId);
-  if (!existing) throw new Error("Ocorrência não encontrada.");
-  if (existing.status === "RESOLVED") return existing;
+/** Status do lote ao sair do bloqueio (sem inventar COMPLETED se ainda há etapa). */
+function statusAfterRelease(
+  lot: Awaited<ReturnType<typeof getLotById>>,
+): "WAITING" | "IN_PROGRESS" | "COMPLETED" {
+  if (!lot) return "WAITING";
+  if (lot.completedAt || lot.currentStepStatus === "COMPLETED") {
+    return "COMPLETED";
+  }
+  if (lot.currentStepStatus === "IN_PROGRESS") return "IN_PROGRESS";
+  return "WAITING";
+}
 
-  const now = new Date().toISOString();
+async function markIncidentResolved(
+  db: Firestore,
+  existing: QualityIncident,
+  resolutionNote: string | undefined,
+  now: string,
+): Promise<QualityIncident> {
   const updated: QualityIncident = omitUndefined({
     ...existing,
     status: "RESOLVED",
@@ -197,6 +205,40 @@ export async function resolveQualityIncident(
   return updated;
 }
 
+/**
+ * Fecha a ocorrência. Exige texto da solução. Se era de bloqueio e o lote
+ * ainda está BLOCKED, exige liberação explícita (Doc 10 §25–27).
+ */
+export async function resolveQualityIncident(
+  db: Firestore,
+  incidentId: string,
+  resolutionNote: string,
+): Promise<QualityIncident> {
+  const note = resolutionNote.trim();
+  if (!note) {
+    throw new Error("Informe o que foi resolvido / a solução aplicada.");
+  }
+
+  const existing = await getQualityIncident(db, incidentId);
+  if (!existing) throw new Error("Ocorrência não encontrada.");
+  if (existing.status === "RESOLVED") return existing;
+
+  if (existing.blocksLot) {
+    const lot = await getLotById(db, existing.lotId);
+    if (lot?.status === "BLOCKED") {
+      throw new Error(
+        "Este registro bloqueou o lote. Use Liberar lote (com motivo) para desbloquear e fechar a ocorrência.",
+      );
+    }
+  }
+
+  return markIncidentResolved(db, existing, note, new Date().toISOString());
+}
+
+/**
+ * Libera lote bloqueado (ação auditável) e resolve ocorrências abertas
+ * que pediram o bloqueio — evita “Aberta · Bloqueio” com lote já liberado.
+ */
 export async function releaseBlockedLot(
   db: Firestore,
   lotId: string,
@@ -207,29 +249,36 @@ export async function releaseBlockedLot(
 
   const lot = await getLotById(db, lotId);
   if (!lot) throw new Error("Lote não encontrado.");
-  if (lot.status !== "BLOCKED") throw new Error("Lote não está bloqueado.");
 
   const now = new Date().toISOString();
-  const nextStatus =
-    lot.completedAt || lot.currentStepStatus === "COMPLETED"
-      ? "COMPLETED"
-      : "IN_PROGRESS";
+  const openBlocking = (await listIncidentsByLot(db, lotId)).filter(
+    (i) => i.status === "OPEN" && i.blocksLot,
+  );
 
-  await upsertLot(db, {
-    ...lot,
-    status: nextStatus,
-    updatedAt: now,
-  });
+  if (lot.status === "BLOCKED") {
+    const nextStatus = statusAfterRelease(lot);
+    await upsertLot(db, {
+      ...lot,
+      status: nextStatus,
+      updatedAt: now,
+    });
 
-  await createProductionEvent(db, {
-    id: newId("evt"),
-    lotId: lot.id,
-    productionOrderId: lot.productionOrderId,
-    type: "LOT_UNBLOCKED",
-    occurredAt: now,
-    createdAt: now,
-    metadata: { reason: note },
-  });
+    await createProductionEvent(db, {
+      id: newId("evt"),
+      lotId: lot.id,
+      productionOrderId: lot.productionOrderId,
+      type: "LOT_UNBLOCKED",
+      occurredAt: now,
+      createdAt: now,
+      metadata: { reason: note },
+    });
+  } else if (openBlocking.length === 0) {
+    throw new Error("Lote não está bloqueado.");
+  }
+
+  for (const incident of openBlocking) {
+    await markIncidentResolved(db, incident, note, now);
+  }
 }
 
 export async function getLotQualitySummary(db: Firestore, lotId: string) {
