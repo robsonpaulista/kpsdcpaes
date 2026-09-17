@@ -1,15 +1,40 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ProductionListFiltersPanel } from "@/components/cockpit/ProductionListFilters";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
+import { CockpitPageHeader } from "@/components/shared/CockpitUi";
+import {
+  Alert,
+  Button,
+  EmptyState,
+  ListRow,
+  SegmentedControl,
+  StatusBadge,
+  type StatusTone,
+} from "@/components/ui";
 import { useFactoryLiveReload } from "@/hooks/useFactoryLiveReload";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
+import { formatDateBr } from "@/lib/format/date";
 import { productionStatusLabel } from "@/lib/labels/production-status";
+import {
+  EMPTY_PRODUCTION_FILTERS,
+  hasActiveProductionFilters,
+  inPeriod,
+  type ProductionListFilters,
+} from "@/lib/production/list-filters";
+import { buildProductMaps } from "@/lib/products/product-maps";
+import { listLots } from "@/repositories/lots.repository";
 import { listProductionOrders } from "@/repositories/orders.repository";
 import { listProducts } from "@/repositories/products.repository";
-import type { ProductionOrder, ProductionStatus } from "@/types/production";
+import type {
+  Product,
+  ProductionLot,
+  ProductionOrder,
+  ProductionStatus,
+} from "@/types/production";
 
-type Filter = "active" | "all";
+type StatusFilter = "active" | "all";
 
 function isActive(status: ProductionStatus): boolean {
   return (
@@ -19,16 +44,19 @@ function isActive(status: ProductionStatus): boolean {
   );
 }
 
-function statusClass(status: ProductionStatus): string {
+function statusTone(status: ProductionStatus): StatusTone {
   switch (status) {
     case "IN_PROGRESS":
-      return "text-dc-orange";
+    case "RELEASED":
+      return "good";
     case "COMPLETED":
-      return "text-success";
+      return "neutral";
     case "CANCELLED":
-      return "text-danger";
+      return "critical";
+    case "WAITING":
+      return "warning";
     default:
-      return "text-dc-text-secondary";
+      return "neutral";
   }
 }
 
@@ -37,8 +65,16 @@ function statusClass(status: ProductionStatus): string {
  */
 export function ProductionOrdersClient() {
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
+  const [lots, setLots] = useState<ProductionLot[]>([]);
+  const [catalog, setCatalog] = useState<Product[]>([]);
   const [productNames, setProductNames] = useState<Record<string, string>>({});
-  const [filter, setFilter] = useState<Filter>("active");
+  const [productImages, setProductImages] = useState<
+    Record<string, string | null>
+  >({});
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
+  const [filters, setFilters] = useState<ProductionListFilters>(
+    EMPTY_PRODUCTION_FILTERS,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,14 +84,21 @@ export function ProductionOrdersClient() {
     try {
       if (!isFirebaseConfigured()) throw new Error("Firebase não configurado.");
       const db = getFirestoreDb();
-      const [data, products] = await Promise.all([
+      const [data, products, allLots] = await Promise.all([
         listProductionOrders(db),
         listProducts(db),
+        listLots(db),
       ]);
       setOrders(data);
-      const names: Record<string, string> = {};
-      for (const p of products) names[p.id] = p.name;
-      setProductNames(names);
+      setLots(allLots);
+      setCatalog(
+        products
+          .filter((p) => p.active)
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+      );
+      const maps = buildProductMaps(products);
+      setProductNames(maps.names);
+      setProductImages(maps.images);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar OPs");
       if (!opts?.silent) setOrders([]);
@@ -70,142 +113,165 @@ export function ProductionOrdersClient() {
 
   useFactoryLiveReload(load);
 
-  const visible = useMemo(() => {
-    if (filter === "active") return orders.filter((o) => isActive(o.productionStatus));
+  const byStatus = useMemo(() => {
+    if (statusFilter === "active") {
+      return orders.filter((o) => isActive(o.productionStatus));
+    }
     return orders;
-  }, [orders, filter]);
+  }, [orders, statusFilter]);
+
+  const visible = useMemo(() => {
+    const lotQ = filters.lotQuery.trim().toUpperCase();
+    const opQ = filters.opQuery.trim().toUpperCase();
+
+    return byStatus.filter((order) => {
+      if (
+        !inPeriod(
+          order.productionDate ?? order.updatedAt.slice(0, 10),
+          filters.dateFrom,
+          filters.dateTo,
+        )
+      ) {
+        return false;
+      }
+      if (filters.productId && order.productId !== filters.productId) {
+        return false;
+      }
+      if (opQ && !order.externalOrderNumber.toUpperCase().includes(opQ)) {
+        return false;
+      }
+      if (lotQ) {
+        const hit = lots.some(
+          (l) =>
+            l.productionOrderId === order.id &&
+            l.lotCode.toUpperCase().includes(lotQ),
+        );
+        if (!hit) return false;
+      }
+      return true;
+    });
+  }, [byStatus, filters, lots]);
+
+  const counts = useMemo(
+    () => ({
+      active: orders.filter((o) => isActive(o.productionStatus)).length,
+      all: orders.length,
+    }),
+    [orders],
+  );
+
+  const filtersActive = hasActiveProductionFilters(filters);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-dc-text">Ordens de produção</h1>
-          <p className="mt-1 text-sm text-dc-text-secondary">
-            O que foi planejado e o status de execução · sync no PCP
-          </p>
-        </div>
-        <div className="flex gap-2 text-xs">
-          {(
-            [
-              ["active", "Em aberto"],
-              ["all", "Todas"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setFilter(id)}
-              className={`rounded-lg px-2.5 py-1.5 font-medium ${
-                filter === id
-                  ? "bg-dc-orange/10 text-dc-orange"
-                  : "text-dc-text-secondary hover:text-dc-text"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-5">
+      <CockpitPageHeader
+        eyebrow="Execução"
+        title="Ordens de produção"
+        description="O que foi planejado e o status de execução · sync no PCP"
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => void load()}>
+            Atualizar
+          </Button>
+        }
+      />
+
+      <SegmentedControl
+        activeId={statusFilter}
+        onSelect={(id) => setStatusFilter(id as StatusFilter)}
+        items={[
+          { id: "active", label: "Em aberto", count: counts.active },
+          { id: "all", label: "Todas", count: counts.all },
+        ]}
+      />
+
+      <ProductionListFiltersPanel
+        filters={filters}
+        onChange={setFilters}
+        catalog={catalog}
+        resultLabel={
+          loading
+            ? undefined
+            : `${visible.length} ordem${visible.length === 1 ? "" : "ens"}${
+                filtersActive ? " (filtrado)" : ""
+              }`
+        }
+      />
 
       {loading ? (
-        <p className="text-sm text-dc-text-secondary">Carregando…</p>
+        <p className="text-sm text-[var(--ink-2)]">Carregando…</p>
       ) : error ? (
-        <p className="text-sm text-danger">{error}</p>
+        <Alert tone="critical">{error}</Alert>
       ) : visible.length === 0 ? (
-        <p className="text-sm text-dc-text-secondary">
-          Nenhuma OP neste filtro. Sincronize no PCP se ainda não houver dados.
-        </p>
+        <EmptyState
+          title={
+            filtersActive
+              ? "Nenhuma OP neste filtro"
+              : "Nenhuma OP neste filtro"
+          }
+          detail={
+            filtersActive
+              ? "Ajuste ou limpe os filtros."
+              : "Sincronize no PCP se ainda não houver dados."
+          }
+          action={
+            filtersActive ? (
+              <Button
+                variant="secondary"
+                onClick={() => setFilters(EMPTY_PRODUCTION_FILTERS)}
+              >
+                Limpar filtros
+              </Button>
+            ) : (
+              <Button href="/app/pcp">Ir ao PCP →</Button>
+            )
+          }
+        />
       ) : (
-        <>
-          <div className="hidden overflow-x-auto rounded-[14px] border border-dc-border bg-dc-surface md:block">
-            <table className="min-w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-dc-border text-xs text-dc-text-muted">
-                  <th className="px-4 py-3 font-medium">OP</th>
-                  <th className="px-4 py-3 font-medium">Produto</th>
-                  <th className="px-4 py-3 font-medium">Planejado</th>
-                  <th className="px-4 py-3 font-medium">Data</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((order) => {
-                  const name =
-                    (order.productId && productNames[order.productId]) ||
-                    (
-                      order.externalSnapshot as
-                        | { externalProductName?: string }
-                        | undefined
-                    )?.externalProductName ||
-                    "—";
-                  return (
-                    <tr
-                      key={order.id}
-                      className="border-b border-dc-border/60 last:border-0"
-                    >
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/app/cockpit/production/orders/${encodeURIComponent(order.id)}`}
-                          className="font-semibold tabular-nums text-dc-orange"
-                        >
-                          {order.externalOrderNumber}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-dc-text">{name}</td>
-                      <td className="px-4 py-3 tabular-nums text-dc-text-secondary">
-                        {order.plannedQuantity?.toLocaleString("pt-BR") ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 tabular-nums text-dc-text-secondary">
-                        {order.productionDate ?? "—"}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-xs font-semibold ${statusClass(order.productionStatus)}`}
-                      >
-                        {productionStatusLabel(order.productionStatus)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <ul className="space-y-3 md:hidden">
-            {visible.map((order) => {
-              const name =
-                (order.productId && productNames[order.productId]) ||
-                (
-                  order.externalSnapshot as
-                    | { externalProductName?: string }
-                    | undefined
-                )?.externalProductName ||
-                "—";
-              return (
-                <li
-                  key={order.id}
-                  className="rounded-[14px] border border-dc-border bg-dc-surface p-4"
-                >
-                  <Link
-                    href={`/app/cockpit/production/orders/${encodeURIComponent(order.id)}`}
-                    className="font-semibold tabular-nums text-dc-orange"
-                  >
-                    OP {order.externalOrderNumber}
-                  </Link>
-                  <p className="mt-1 text-sm text-dc-text">{name}</p>
-                  <p className="mt-1 text-xs text-dc-text-secondary">
-                    {order.plannedQuantity?.toLocaleString("pt-BR") ?? "—"} un.
-                    {order.productionDate ? ` · ${order.productionDate}` : ""}
-                  </p>
-                  <p
-                    className={`mt-2 text-xs font-semibold ${statusClass(order.productionStatus)}`}
-                  >
+        <ul className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+          {visible.map((order) => (
+            <li key={order.id}>
+              <ListRow
+                href={`/app/cockpit/production/orders/${encodeURIComponent(order.id)}`}
+                leading={
+                  <ProductThumbnail
+                    imageUrl={
+                      order.productId ? productImages[order.productId] : null
+                    }
+                    alt={
+                      order.productId
+                        ? (productNames[order.productId] ?? order.productId)
+                        : "Produto"
+                    }
+                    size="sm"
+                  />
+                }
+                title={
+                  <span className="font-mono tabular-nums">
+                    {order.externalOrderNumber}
+                  </span>
+                }
+                meta={
+                  <>
+                    {order.productId
+                      ? (productNames[order.productId] ?? order.productId)
+                      : "Produto não mapeado"}
+                    {order.productionDate
+                      ? ` · ${formatDateBr(order.productionDate)}`
+                      : ""}
+                    {order.plannedQuantity != null
+                      ? ` · ${order.plannedQuantity.toLocaleString("pt-BR")} un.`
+                      : ""}
+                  </>
+                }
+                trailing={
+                  <StatusBadge status={statusTone(order.productionStatus)}>
                     {productionStatusLabel(order.productionStatus)}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
-        </>
+                  </StatusBadge>
+                }
+              />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

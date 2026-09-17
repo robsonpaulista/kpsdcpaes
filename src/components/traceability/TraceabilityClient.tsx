@@ -7,6 +7,7 @@ import {
   CockpitEmpty,
   CockpitPageHeader,
 } from "@/components/shared/CockpitUi";
+import { Alert, Button, Input } from "@/components/ui";
 import { stepTypeLabel } from "@/domain/production/process-route";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
 import { lotTraceabilityHref } from "@/lib/links/lots";
@@ -161,23 +162,24 @@ export function TraceabilityClient() {
           void handleSearch(query);
         }}
       >
-        <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-dc-text-muted">
+        <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
           Buscar lote, OP ou código
-          <input
+          <Input
             value={query}
             onChange={(e) => setQuery(e.target.value.toUpperCase())}
             placeholder="Ex.: PF26082701 ou 260827-002"
-            className="mt-2 h-14 w-full rounded-[14px] border border-dc-border bg-dc-bg px-4 text-lg tabular-nums outline-none focus:border-dc-orange"
+            className="mt-2 h-14 rounded-[14px] font-mono text-lg tabular-nums"
           />
         </label>
-        <button
+        <Button
           type="submit"
           disabled={searching || !query.trim()}
-          className="dc-btn-primary mt-4 h-12 px-6 disabled:opacity-40"
+          className="mt-4 h-12 px-6"
+          size="lg"
         >
           {searching ? "BUSCANDO…" : "BUSCAR"}
-        </button>
-        {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
+        </Button>
+        {error ? <Alert tone="critical" className="mt-3">{error}</Alert> : null}
       </form>
 
       {hits && hits.length > 0 ? (
@@ -190,7 +192,7 @@ export function TraceabilityClient() {
               <li key={lot.id}>
                 <Link
                   href={lotTraceabilityHref(lot.id)}
-                  className="flex flex-wrap items-center justify-between gap-2 px-1 py-3 transition hover:text-dc-orange"
+                  className="flex flex-wrap items-center justify-between gap-2 px-1 py-3 transition-colors duration-150 hover:bg-[var(--surface-2)]"
                 >
                   <span className="text-base font-semibold tabular-nums">
                     {lot.lotCode}

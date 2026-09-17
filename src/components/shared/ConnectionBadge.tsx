@@ -7,24 +7,33 @@ type ConnectionBadgeProps = {
   dense?: boolean;
   /** Display em fundo escuro. */
   onDark?: boolean;
+  /** No Cockpit: "Ao vivo" em vez de "Conectado". */
+  liveLabel?: boolean;
 };
 
 /**
  * Indicador de conexão (Doc 07 §83–87).
  * Sem menção a Firebase na UX.
  */
-export function ConnectionBadge({ dense, onDark }: ConnectionBadgeProps) {
+export function ConnectionBadge({ dense, onDark, liveLabel }: ConnectionBadgeProps) {
   const { online } = useFactoryConnection();
 
   if (online) {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-          onDark ? "text-white/60" : "text-dc-text-secondary"
+        className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+          onDark
+            ? "text-white/60"
+            : liveLabel
+              ? "text-success"
+              : "text-dc-text-secondary"
         }`}
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-        Conectado
+        <span
+          className={`h-1.5 w-1.5 rounded-full bg-success ${liveLabel ? "dc-live-dot" : ""}`}
+          aria-hidden
+        />
+        {liveLabel ? "Ao vivo" : "Conectado"}
       </span>
     );
   }

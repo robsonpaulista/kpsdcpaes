@@ -13,6 +13,7 @@ import {
   integrationStatusLabel,
   productionStatusLabel,
 } from "@/lib/labels/production-status";
+import { formatDateBr } from "@/lib/format/date";
 import { listProductionOrders } from "@/repositories/orders.repository";
 import type { ProductionOrder, ProductionStatus } from "@/types/production";
 
@@ -35,7 +36,7 @@ function statusTone(status: ProductionStatus): string {
     case "COMPLETED":
       return "font-semibold text-success";
     case "IN_PROGRESS":
-      return "font-semibold text-dc-orange";
+      return "font-semibold text-[var(--accent)]";
     case "CANCELLED":
       return "font-semibold text-danger";
     default:
@@ -206,7 +207,7 @@ export function ProductionOrdersList() {
         <button
           type="button"
           onClick={() => void load()}
-          className="text-sm font-semibold text-dc-orange"
+          className="text-sm font-semibold text-[var(--accent)] hover:underline"
         >
           Atualizar
         </button>
@@ -229,7 +230,7 @@ export function ProductionOrdersList() {
           {counts.completed} OP(s) concluída(s) —{" "}
           <Link
             href="/app/pcp?tab=completed"
-            className="font-semibold text-dc-orange"
+            className="font-semibold text-[var(--accent)] hover:underline"
           >
             ver concluídas →
           </Link>
@@ -262,8 +263,8 @@ export function ProductionOrdersList() {
               <li key={order.id}>
                 <Link
                   href={href}
-                  className={`dc-panel block p-4 transition hover:border-dc-orange/35 hover:shadow-dc-md ${
-                    done ? "border-success/25 bg-success/5" : ""
+                  className={`block rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-4 transition-[background-color,border-color] duration-150 hover:border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] hover:bg-[var(--surface-2)] ${
+                    done ? "border-[color-mix(in_srgb,var(--good)_28%,var(--border))] bg-[color-mix(in_srgb,var(--good-bg)_55%,var(--surface))]" : ""
                   }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -286,7 +287,7 @@ export function ProductionOrdersList() {
                           {order.plannedQuantity?.toLocaleString("pt-BR")} un.
                         </span>
                         {order.productionDate
-                          ? ` · ${order.productionDate}`
+                          ? ` · ${formatDateBr(order.productionDate)}`
                           : null}
                       </p>
                     </div>
@@ -303,7 +304,7 @@ export function ProductionOrdersList() {
                       <p className={`mt-1 ${statusTone(order.productionStatus)}`}>
                         {productionStatusLabel(order.productionStatus)}
                       </p>
-                      <p className="mt-4 text-sm font-bold text-dc-orange">
+                      <p className="mt-4 text-sm font-bold text-[var(--accent)]">
                         {needsMapping
                           ? "Mapear →"
                           : order.productionStatus === "WAITING"

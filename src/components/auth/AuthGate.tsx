@@ -10,7 +10,7 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
  */
 export function AuthGate({
   children,
-  label = "Factory OS",
+  label = "KPS DC Pães",
 }: {
   children: ReactNode;
   label?: string;

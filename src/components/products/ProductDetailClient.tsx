@@ -11,6 +11,7 @@ import {
   resolveProcessRoute,
   stepTypeLabel,
 } from "@/domain/production/process-route";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
 import { useFactoryLiveReload } from "@/hooks/useFactoryLiveReload";
 import { useFactoryRole } from "@/hooks/useFactoryRole";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
@@ -159,7 +160,7 @@ export function ProductDetailClient({ productId }: { productId: string }) {
         />
         <CockpitEmpty
           title={error ?? "Produto não encontrado"}
-          detail="Volte à lista ou semee o catálogo mock."
+          detail="Volte à lista ou semee o catálogo DC Pães."
           action={
             <Link href="/app/products" className="dc-btn-primary">
               Ver produtos
@@ -182,6 +183,20 @@ export function ProductDetailClient({ productId }: { productId: string }) {
           </Link>
         }
       />
+
+      {product.imageUrl ? (
+        <div className="flex items-start gap-4">
+          <ProductThumbnail
+            imageUrl={product.imageUrl}
+            alt={product.name}
+            size="lg"
+            className="!size-28 !rounded-[14px]"
+          />
+          <p className="max-w-md text-sm text-dc-text-secondary">
+            Imagem do catálogo DC Pães vinculada a este SKU.
+          </p>
+        </div>
+      ) : null}
 
       <CockpitSegments
         activeId={tab}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LotQrLabel } from "@/components/shared/LotQrLabel";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
 import { CockpitPageHeader } from "@/components/shared/CockpitUi";
 import { stepTypeLabel } from "@/domain/production/process-route";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
@@ -12,6 +13,7 @@ import {
 } from "@/lib/links/lots";
 import { productionEventLabel } from "@/lib/labels/production-events";
 import { executionStatusLabel } from "@/lib/labels/production-status";
+import { formatDateBr } from "@/lib/format/date";
 import { formatMinutesLabel } from "@/lib/labels/timing";
 import { getStation } from "@/domain/production/stations";
 import { listEquipment } from "@/repositories/equipment.repository";
@@ -106,36 +108,46 @@ export function LotTimelineClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={href}
-          className="text-sm font-semibold text-dc-text-secondary transition hover:text-dc-text"
-        >
-          ← {backLabel === "Voltar" && !backHref
-            ? mode === "traceability"
-              ? "Rastreabilidade"
-              : "Voltar à OP"
-            : backLabel}
-        </Link>
-        <CockpitPageHeader
-          eyebrow={
-            mode === "traceability"
-              ? "Rastreabilidade · histórico do lote"
-              : "Lote em produção"
-          }
-          title={lot.lotCode}
-          description={`${product?.name ?? lot.productId}${
-            order ? ` · OP ${order.externalOrderNumber}` : ""
-          }`}
+      <div className="flex flex-wrap items-start gap-4">
+        <ProductThumbnail
+          imageUrl={product?.imageUrl}
+          alt={product?.name ?? lot.productId}
+          size="lg"
+          className="!size-20 !rounded-[14px]"
         />
-        <p className="mt-2 text-sm text-dc-text-muted">
-          {lot.currentStep ? stepTypeLabel(lot.currentStep) : "—"} ·{" "}
-          {executionStatusLabel(lot.currentStepStatus, lot.status)}
-          {order?.productionDate ? ` · ${order.productionDate}` : null}
-          {lot.processRoute?.length
-            ? " · rota snapshot na liberação"
-            : null}
-        </p>
+        <div className="min-w-0 flex-1">
+          <Link
+            href={href}
+            className="text-sm font-semibold text-dc-text-secondary transition hover:text-dc-text"
+          >
+            ← {backLabel === "Voltar" && !backHref
+              ? mode === "traceability"
+                ? "Rastreabilidade"
+                : "Voltar à OP"
+              : backLabel}
+          </Link>
+          <CockpitPageHeader
+            eyebrow={
+              mode === "traceability"
+                ? "Rastreabilidade · histórico do lote"
+                : "Lote em produção"
+            }
+            title={lot.lotCode}
+            description={`${product?.name ?? lot.productId}${
+              order ? ` · OP ${order.externalOrderNumber}` : ""
+            }`}
+          />
+          <p className="mt-2 text-sm text-dc-text-muted">
+            {lot.currentStep ? stepTypeLabel(lot.currentStep) : "—"} ·{" "}
+            {executionStatusLabel(lot.currentStepStatus, lot.status)}
+            {order?.productionDate
+              ? ` · ${formatDateBr(order.productionDate)}`
+              : null}
+            {lot.processRoute?.length
+              ? " · rota snapshot na liberação"
+              : null}
+          </p>
+        </div>
       </div>
 
       <LotQrLabel
@@ -275,7 +287,7 @@ export function LotTimelineClient({
           </ul>
           <Link
             href="/app/quality/incidents"
-            className="mt-4 inline-block text-sm font-semibold text-dc-orange"
+            className="mt-4 inline-block text-sm font-semibold text-[var(--accent)] hover:underline"
           >
             Abrir ocorrências →
           </Link>
@@ -292,7 +304,7 @@ export function LotTimelineClient({
           <ol className="relative mt-5 space-y-0 border-l-2 border-dc-border pl-5">
             {events.map((event) => (
               <li key={event.id} className="relative pb-5 last:pb-0">
-                <span className="absolute -left-[1.4rem] top-1 size-2.5 rounded-full border-2 border-dc-surface bg-dc-orange" />
+                <span className="absolute -left-[1.4rem] top-1 size-2.5 rounded-full border-2 border-[var(--surface)] bg-[var(--accent)]" />
                 <div className="flex flex-wrap gap-3 text-sm">
                   <span className="w-14 shrink-0 tabular-nums font-semibold text-dc-text-muted">
                     {new Date(event.occurredAt).toLocaleTimeString("pt-BR", {
@@ -329,14 +341,14 @@ export function LotTimelineClient({
         {mode === "production" ? (
           <Link
             href={lotTraceabilityHref(lot.id)}
-            className="font-semibold text-dc-orange"
+            className="font-semibold text-[var(--accent)] hover:underline"
           >
             Abrir em Rastreabilidade →
           </Link>
         ) : (
           <Link
             href={lotProductionHref(lot.id)}
-            className="font-semibold text-dc-orange"
+            className="font-semibold text-[var(--accent)] hover:underline"
           >
             Ver no contexto Produção →
           </Link>

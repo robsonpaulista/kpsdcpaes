@@ -2,137 +2,137 @@ import type {
   ExternalProductionOrder,
   NormalizedProductionOrder,
 } from "@/integrations/production-orders/types/external-production-order";
+import { FACTORY_PRODUCT_CATALOG } from "@/domain/production/product-catalog-seed";
 
 export const MOCK_SOURCE_SYSTEM = "MOCK_DC_PAES";
 
-/**
- * Fixtures determinísticas — Doc 11 / Fase 0.
- * Valores de exemplo do material; NÃO são regra de produto.
- */
-export const MOCK_EXTERNAL_ORDERS: ExternalProductionOrder[] = [
-  {
-    externalId: "mock-op-001",
-    externalOrderNumber: "260826-001",
-    externalProductCode: "001234",
-    externalProductName: "PAO HAMB 90G",
-    plannedQuantity: 5000,
-    productionDate: "2026-08-26",
-    externalStatus: "RELEASED",
-    sourceUpdatedAt: "2026-08-26T07:00:00.000Z",
-    numberOfBatches: 5,
-    massWeightKg: 80,
-  },
-  {
-    externalId: "mock-op-002",
-    externalOrderNumber: "260826-002",
-    externalProductCode: "001235",
-    externalProductName: "PAO HOT DOG",
-    plannedQuantity: 4000,
-    productionDate: "2026-08-26",
-    externalStatus: "IN_PROGRESS",
-    sourceUpdatedAt: "2026-08-26T08:30:00.000Z",
-    numberOfBatches: 4,
-    massWeightKg: 70,
-  },
-  {
-    externalId: "mock-op-003",
-    externalOrderNumber: "260825-010",
-    externalProductCode: "001234",
-    externalProductName: "PAO HAMB 90G",
-    plannedQuantity: 3000,
-    productionDate: "2026-08-25",
-    externalStatus: "COMPLETED",
-    sourceUpdatedAt: "2026-08-25T18:00:00.000Z",
-    numberOfBatches: 3,
-    massWeightKg: 80,
-  },
-  {
-    externalId: "mock-op-004",
-    externalOrderNumber: "260826-014",
-    externalProductCode: "001897",
-    externalProductName: "PAO AUSTRALIANO 70G",
-    plannedQuantity: 2000,
-    productionDate: "2026-08-26",
-    externalStatus: "RELEASED",
-    sourceUpdatedAt: "2026-08-26T07:15:00.000Z",
-    numberOfBatches: 2,
-    massWeightKg: 60,
-  },
-  {
-    externalId: "mock-op-005",
-    externalOrderNumber: "260826-005",
-    externalProductCode: "001234",
-    externalProductName: "PAO HAMB 90G",
-    plannedQuantity: 6000,
-    productionDate: "2026-08-26",
-    externalStatus: "RELEASED",
-    sourceUpdatedAt: "2026-08-26T09:15:00.000Z",
-    numberOfBatches: 6,
-    massWeightKg: 80,
-    _scenario: "UPDATED_AFTER_IMPORT",
-  },
-  {
-    externalId: "mock-op-006",
-    externalOrderNumber: "260826-006",
-    externalProductCode: "001236",
-    externalProductName: "PAO DE FORMA",
-    plannedQuantity: 3500,
-    productionDate: "2026-08-26",
-    externalStatus: "CANCELLED",
-    sourceUpdatedAt: "2026-08-26T10:00:00.000Z",
-    numberOfBatches: 3,
-    massWeightKg: 75,
-  },
-  {
-    externalId: "mock-op-007",
-    externalOrderNumber: "260827-001",
-    externalProductCode: "001235",
-    externalProductName: "PAO HOT DOG",
-    plannedQuantity: 8000,
-    productionDate: "2026-08-27",
-    externalStatus: "RELEASED",
-    sourceUpdatedAt: "2026-08-27T06:00:00.000Z",
-    numberOfBatches: 8,
-    massWeightKg: 70,
-  },
-  {
-    externalId: "mock-op-008",
-    externalOrderNumber: "260827-002",
-    externalProductCode: "001236",
-    externalProductName: "PAO DE FORMA",
-    plannedQuantity: 1500,
-    productionDate: "2026-08-27",
-    externalStatus: "RELEASED",
-    sourceUpdatedAt: "2026-08-27T06:30:00.000Z",
-    numberOfBatches: 2,
-    massWeightKg: 75,
-  },
-];
+function localDateString(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
-/** Produtos Factory conhecidos para mapping (exceto 001897 — não mapeado). */
-export const MOCK_FACTORY_PRODUCTS = [
-  {
-    code: "PAO-HAMB-90",
-    name: "Pão Hambúrguer 90 g",
-    externalProductCode: "001234",
-    nominalWeight: 90,
-    unit: "un",
-  },
-  {
-    code: "PAO-HOTDOG",
-    name: "Pão Hot Dog",
-    externalProductCode: "001235",
-    nominalWeight: 50,
-    unit: "un",
-  },
-  {
-    code: "PAO-FORMA",
-    name: "Pão de Forma",
-    externalProductCode: "001236",
-    nominalWeight: 500,
-    unit: "un",
-  },
-] as const;
+function isoAt(date: string, hour: number, minute = 0): string {
+  return new Date(`${date}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`).toISOString();
+}
+
+/**
+ * OPs de exemplo alinhadas ao catálogo real DC Pães (data = hoje).
+ */
+export function getMockExternalOrders(
+  now = new Date(),
+): ExternalProductionOrder[] {
+  const today = localDateString(now);
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = localDateString(yesterdayDate);
+
+  return [
+    {
+      externalId: "mock-op-001",
+      externalOrderNumber: `${today.slice(2).replaceAll("-", "")}-001`,
+      externalProductCode: "DC0001",
+      externalProductName: "PAO HB ESPINAFRE 10 CM (4 UND)",
+      plannedQuantity: 4800,
+      productionDate: today,
+      externalStatus: "RELEASED",
+      sourceUpdatedAt: isoAt(today, 6, 30),
+      numberOfBatches: 4,
+      massWeightKg: 72,
+    },
+    {
+      externalId: "mock-op-002",
+      externalOrderNumber: `${today.slice(2).replaceAll("-", "")}-002`,
+      externalProductCode: "DC0005",
+      externalProductName: "PAO HB AUSTRALIANO 10 CM (4 UND)",
+      plannedQuantity: 3600,
+      productionDate: today,
+      externalStatus: "IN_PROGRESS",
+      sourceUpdatedAt: isoAt(today, 7, 0),
+      numberOfBatches: 3,
+      massWeightKg: 65,
+    },
+    {
+      externalId: "mock-op-003",
+      externalOrderNumber: `${today.slice(2).replaceAll("-", "")}-003`,
+      externalProductCode: "DC0003",
+      externalProductName: "PAO HB BRIOCHE 10 CM (4 UND)",
+      plannedQuantity: 2400,
+      productionDate: today,
+      externalStatus: "IN_PROGRESS",
+      sourceUpdatedAt: isoAt(today, 7, 15),
+      numberOfBatches: 2,
+      massWeightKg: 58,
+    },
+    {
+      externalId: "mock-op-004",
+      externalOrderNumber: `${today.slice(2).replaceAll("-", "")}-004`,
+      externalProductCode: "DC0004",
+      externalProductName: "PAO HB TRAD GERGELIM 10 CM (4 UND)",
+      plannedQuantity: 3200,
+      productionDate: today,
+      externalStatus: "RELEASED",
+      sourceUpdatedAt: isoAt(today, 7, 45),
+      numberOfBatches: 3,
+      massWeightKg: 60,
+    },
+    {
+      externalId: "mock-op-005",
+      externalOrderNumber: `${today.slice(2).replaceAll("-", "")}-005`,
+      externalProductCode: "DC0011",
+      externalProductName: "PAO HB RUSTICO 10 CM (4 UND)",
+      plannedQuantity: 2000,
+      productionDate: today,
+      externalStatus: "IN_PROGRESS",
+      sourceUpdatedAt: isoAt(today, 8, 0),
+      numberOfBatches: 2,
+      massWeightKg: 55,
+    },
+    {
+      externalId: "mock-op-006",
+      externalOrderNumber: `${today.slice(2).replaceAll("-", "")}-006`,
+      externalProductCode: "DC0025",
+      externalProductName: "PAO MINI HB AUSTRALIANO (12 UND)",
+      plannedQuantity: 6000,
+      productionDate: today,
+      externalStatus: "IN_PROGRESS",
+      sourceUpdatedAt: isoAt(today, 8, 20),
+      numberOfBatches: 5,
+      massWeightKg: 48,
+    },
+    {
+      externalId: "mock-op-007",
+      externalOrderNumber: `${yesterday.slice(2).replaceAll("-", "")}-010`,
+      externalProductCode: "DC0008",
+      externalProductName: "PAO HB CENOURA 10 CM (4 UND)",
+      plannedQuantity: 2800,
+      productionDate: yesterday,
+      externalStatus: "COMPLETED",
+      sourceUpdatedAt: isoAt(yesterday, 18, 0),
+      numberOfBatches: 3,
+      massWeightKg: 62,
+    },
+    {
+      externalId: "mock-op-008",
+      externalOrderNumber: `${today.slice(2).replaceAll("-", "")}-008`,
+      externalProductCode: "DC0099",
+      externalProductName: "PAO HB NAO MAPEADO",
+      plannedQuantity: 1000,
+      productionDate: today,
+      externalStatus: "RELEASED",
+      sourceUpdatedAt: isoAt(today, 9, 0),
+      numberOfBatches: 1,
+      massWeightKg: 40,
+    },
+  ];
+}
+
+/** Snapshot estático para UI — preferir getMockExternalOrders() em runtime. */
+export const MOCK_EXTERNAL_ORDERS = getMockExternalOrders();
+
+/** Catálogo Factory (imagens reais) — seed + mappings mock. */
+export const MOCK_FACTORY_PRODUCTS = FACTORY_PRODUCT_CATALOG;
 
 export function toNormalized(
   order: ExternalProductionOrder,

@@ -81,6 +81,8 @@ export interface Product {
   active: boolean;
   unit?: string;
   nominalWeight?: number;
+  /** Foto do produto (path público, ex.: /products/...). */
+  imageUrl?: string;
   /** Tempos/rota por SKU — override do default da fábrica. */
   processRoute?: ProcessRouteStep[];
   createdAt: string;

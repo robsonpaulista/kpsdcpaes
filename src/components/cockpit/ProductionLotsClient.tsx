@@ -1,25 +1,49 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { stepTypeLabel } from "@/domain/production/process-route";
+import { ProductionListFiltersPanel } from "@/components/cockpit/ProductionListFilters";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
+import { CockpitPageHeader } from "@/components/shared/CockpitUi";
 import {
-  CockpitEmpty,
-  CockpitPageHeader,
-  CockpitSegments,
-} from "@/components/shared/CockpitUi";
+  Alert,
+  Button,
+  EmptyState,
+  ListRow,
+  SegmentedControl,
+  StatusBadge,
+  type StatusTone,
+} from "@/components/ui";
 import { useFactoryLiveReload } from "@/hooks/useFactoryLiveReload";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
 import { lotStatusLabel } from "@/lib/labels/production-status";
+import {
+  EMPTY_PRODUCTION_FILTERS,
+  hasActiveProductionFilters,
+  inPeriod,
+  type ProductionListFilters,
+} from "@/lib/production/list-filters";
+import { buildProductMaps } from "@/lib/products/product-maps";
 import { listLots } from "@/repositories/lots.repository";
 import { listProductionOrders } from "@/repositories/orders.repository";
 import { listProducts } from "@/repositories/products.repository";
-import type { LotStatus, ProductionLot } from "@/types/production";
+import type {
+  LotStatus,
+  Product,
+  ProductionLot,
+} from "@/types/production";
 
-type Filter = "open" | "blocked" | "all";
+type StatusFilter = "open" | "blocked" | "all";
 
 function isOpen(status: LotStatus): boolean {
   return status === "WAITING" || status === "IN_PROGRESS";
+}
+
+function lotTone(status: LotStatus): StatusTone {
+  if (status === "BLOCKED") return "critical";
+  if (status === "IN_PROGRESS") return "good";
+  if (status === "WAITING") return "warning";
+  return "neutral";
 }
 
 /**
@@ -27,9 +51,16 @@ function isOpen(status: LotStatus): boolean {
  */
 export function ProductionLotsClient() {
   const [lots, setLots] = useState<ProductionLot[]>([]);
+  const [catalog, setCatalog] = useState<Product[]>([]);
   const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [productImages, setProductImages] = useState<
+    Record<string, string | null>
+  >({});
   const [orderNumbers, setOrderNumbers] = useState<Record<string, string>>({});
-  const [filter, setFilter] = useState<Filter>("open");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [filters, setFilters] = useState<ProductionListFilters>(
+    EMPTY_PRODUCTION_FILTERS,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,11 +76,18 @@ export function ProductionLotsClient() {
         listProductionOrders(db),
       ]);
       setLots(
-        allLots.filter((l) => l.status !== "COMPLETED" && l.status !== "CANCELLED"),
+        allLots.filter(
+          (l) => l.status !== "COMPLETED" && l.status !== "CANCELLED",
+        ),
       );
-      const names: Record<string, string> = {};
-      for (const p of products) names[p.id] = p.name;
-      setProductNames(names);
+      setCatalog(
+        products
+          .filter((p) => p.active)
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+      );
+      const maps = buildProductMaps(products);
+      setProductNames(maps.names);
+      setProductImages(maps.images);
       const nums: Record<string, string> = {};
       for (const o of orders) nums[o.id] = o.externalOrderNumber;
       setOrderNumbers(nums);
@@ -75,11 +113,35 @@ export function ProductionLotsClient() {
     };
   }, [lots]);
 
-  const visible = useMemo(() => {
-    if (filter === "open") return lots.filter((l) => isOpen(l.status));
-    if (filter === "blocked") return lots.filter((l) => l.status === "BLOCKED");
+  const byStatus = useMemo(() => {
+    if (statusFilter === "open") return lots.filter((l) => isOpen(l.status));
+    if (statusFilter === "blocked") {
+      return lots.filter((l) => l.status === "BLOCKED");
+    }
     return lots;
-  }, [lots, filter]);
+  }, [lots, statusFilter]);
+
+  const visible = useMemo(() => {
+    const lotQ = filters.lotQuery.trim().toUpperCase();
+    const opQ = filters.opQuery.trim().toUpperCase();
+
+    return byStatus.filter((lot) => {
+      const lotDate =
+        lot.createdAt?.slice(0, 10) ?? lot.updatedAt.slice(0, 10);
+      if (!inPeriod(lotDate, filters.dateFrom, filters.dateTo)) return false;
+      if (filters.productId && lot.productId !== filters.productId) {
+        return false;
+      }
+      if (lotQ && !lot.lotCode.toUpperCase().includes(lotQ)) return false;
+      if (opQ) {
+        const op = (orderNumbers[lot.productionOrderId] ?? "").toUpperCase();
+        if (!op.includes(opQ)) return false;
+      }
+      return true;
+    });
+  }, [byStatus, filters, orderNumbers]);
+
+  const filtersActive = hasActiveProductionFilters(filters);
 
   return (
     <div className="space-y-5">
@@ -88,19 +150,15 @@ export function ProductionLotsClient() {
         title="Lotes"
         description="Estado atual de cada lote · concluídos no Histórico"
         actions={
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="dc-btn-secondary h-10 px-4 text-sm"
-          >
+          <Button variant="secondary" size="sm" onClick={() => void load()}>
             Atualizar
-          </button>
+          </Button>
         }
       />
 
-      <CockpitSegments
-        activeId={filter}
-        onSelect={(id) => setFilter(id as Filter)}
+      <SegmentedControl
+        activeId={statusFilter}
+        onSelect={(id) => setStatusFilter(id as StatusFilter)}
         items={[
           { id: "open", label: "Abertos", count: counts.open },
           { id: "blocked", label: "Bloqueados", count: counts.blocked },
@@ -108,56 +166,82 @@ export function ProductionLotsClient() {
         ]}
       />
 
+      <ProductionListFiltersPanel
+        filters={filters}
+        onChange={setFilters}
+        catalog={catalog}
+        resultLabel={
+          loading
+            ? undefined
+            : `${visible.length} lote${visible.length === 1 ? "" : "s"}${
+                filtersActive ? " (filtrado)" : ""
+              }`
+        }
+      />
+
       {loading ? (
-        <p className="text-sm text-dc-text-secondary">Carregando lotes…</p>
+        <p className="text-sm text-[var(--ink-2)]">Carregando lotes…</p>
       ) : error ? (
-        <p className="text-sm text-danger">{error}</p>
+        <Alert tone="critical">{error}</Alert>
       ) : visible.length === 0 ? (
-        <CockpitEmpty
+        <EmptyState
           title="Nenhum lote neste filtro"
-          detail="Liberar uma OP no PCP gera o primeiro lote."
+          detail={
+            filtersActive
+              ? "Ajuste ou limpe os filtros."
+              : "Liberar uma OP no PCP gera o primeiro lote."
+          }
           action={
-            <Link href="/app/pcp" className="dc-btn-primary h-11 px-5 text-sm">
-              Ir ao PCP
-            </Link>
+            filtersActive ? (
+              <Button
+                variant="secondary"
+                onClick={() => setFilters(EMPTY_PRODUCTION_FILTERS)}
+              >
+                Limpar filtros
+              </Button>
+            ) : (
+              <Button href="/app/pcp" size="lg">
+                Ir ao PCP
+              </Button>
+            )
           }
         />
       ) : (
-        <ul className="dc-panel divide-y divide-dc-border/70 overflow-hidden">
+        <ul className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
           {visible.map((lot) => (
             <li key={lot.id}>
-              <Link
+              <ListRow
                 href={`/app/cockpit/production/lots/${encodeURIComponent(lot.id)}`}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 transition hover:bg-dc-surface-secondary/80"
-              >
-                <div className="min-w-0">
-                  <p className="text-base font-semibold tabular-nums tracking-tight text-dc-text">
-                    {lot.lotCode}
-                  </p>
-                  <p className="mt-0.5 truncate text-sm text-dc-text-secondary">
+                leading={
+                  <ProductThumbnail
+                    imageUrl={productImages[lot.productId]}
+                    alt={productNames[lot.productId] ?? lot.productId}
+                    size="sm"
+                  />
+                }
+                title={
+                  <span className="font-mono tabular-nums">{lot.lotCode}</span>
+                }
+                meta={
+                  <>
                     {productNames[lot.productId] ?? lot.productId}
                     {orderNumbers[lot.productionOrderId]
                       ? ` · OP ${orderNumbers[lot.productionOrderId]}`
                       : ""}
-                  </p>
-                </div>
-                <div className="text-right text-sm">
-                  <p
-                    className={`font-semibold ${
-                      lot.status === "BLOCKED"
-                        ? "text-danger"
-                        : lot.status === "IN_PROGRESS"
-                          ? "text-dc-orange"
-                          : "text-dc-text"
-                    }`}
-                  >
+                    {lot.plannedQuantity != null
+                      ? ` · ${lot.plannedQuantity.toLocaleString("pt-BR")} un.`
+                      : ""}
+                    {lot.currentStep
+                      ? ` · ${stepTypeLabel(lot.currentStep)}`
+                      : ""}
+                  </>
+                }
+                trailing={
+                  <StatusBadge status={lotTone(lot.status)}>
                     {lotStatusLabel(lot.status)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-dc-text-muted">
-                    {lot.currentStep ? stepTypeLabel(lot.currentStep) : "—"}
-                  </p>
-                </div>
-              </Link>
+                  </StatusBadge>
+                }
+              />
             </li>
           ))}
         </ul>

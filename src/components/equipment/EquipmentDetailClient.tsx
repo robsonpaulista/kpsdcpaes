@@ -16,6 +16,7 @@ import {
   equipmentStatusLabel,
   equipmentTypeLabel,
 } from "@/lib/labels/equipment";
+import { formatDateTimeBr } from "@/lib/format/date";
 import { listOpenStepRuns } from "@/repositories/execution.repository";
 import { getEquipmentById } from "@/repositories/equipment.repository";
 import { getLotById } from "@/repositories/lots.repository";
@@ -203,7 +204,7 @@ export function EquipmentDetailClient({ equipmentId }: { equipmentId: string }) 
         )}
         {equipment.stoppedAt ? (
           <p className="mt-2 text-xs text-dc-text-muted">
-            Parado desde {equipment.stoppedAt.replace("T", " ").slice(0, 16)}
+            Parado desde {formatDateTimeBr(equipment.stoppedAt)}
             {equipment.stopReason ? ` · ${equipment.stopReason}` : ""}
           </p>
         ) : null}

@@ -22,11 +22,13 @@ import { equipmentTypeLabel } from "@/lib/labels/equipment";
 import { formatDurationClock, remainingMs } from "@/lib/labels/timing";
 import { listQualityLossSignals } from "@/services/quality.service";
 import { computeTimingStatus } from "@/services/workflow.service";
-import type { EquipmentStatus } from "@/types/equipment";
+import type { EquipmentStatus, EquipmentType } from "@/types/equipment";
 import type { LotStepRun, ProductionLot, StepType, TimingStatus } from "@/types/production";
 
-/** Sync sem tentativa recente = possível problema (minutos). */
+/** Sync sem tentativa recente = aviso (minutos). */
 const INTEGRATION_STALE_MINUTES = 60;
+/** Sync acima deste limiar = falha crítica de integração (horas). */
+export const INTEGRATION_CRITICAL_HOURS = 24;
 export type AttentionKind =
   | "LATE"
   | "ATTENTION"
@@ -44,15 +46,28 @@ export interface AttentionItem {
   priority: number;
 }
 
+export type FloorLotStatus = "waiting" | "running" | "stopped" | "blocked";
+
 export interface ProductionLotSummary {
   id: string;
   lotCode: string;
+  productId: string;
   productName: string;
+  imageUrl: string | null;
+  stepType: StepType | null;
   stepLabel: string;
   stepStatusLabel: string;
   timing: TimingStatus | null;
   timingLabel: string;
   href: string;
+  /** Status real para o card "Em produção agora". */
+  floorStatus: FloorLotStatus;
+  floorStatusLabel: string;
+  /** Minutos parado na fila (READY) ou null. */
+  waitingMinutes: number | null;
+  productionOrderId: string;
+  /** Qtde planejada do lote (unidades em produção). */
+  plannedQuantity: number | null;
 }
 
 export interface CompletedLotSummary {
@@ -110,6 +125,7 @@ export interface EquipmentInsight {
   id: string;
   code: string;
   name: string;
+  type: EquipmentType;
   typeLabel: string;
   /** Status efetivo: etapa em andamento sobrescreve AVAILABLE. */
   displayStatus: EquipmentStatus;
@@ -157,6 +173,18 @@ export interface IntegrationAlert {
   href: string;
   statusLabel: string;
   minutesSinceAttempt: number | null;
+  hoursSinceAttempt: number | null;
+  /** true quando falha real ou sync > limiar crítico — banner vermelho. */
+  isCritical: boolean;
+}
+
+/** Séries diárias dos últimos 7 dias (índice 0 = mais antigo). */
+export interface CockpitTrendSeries {
+  efficiencyPercent: number[];
+  lossBrl: number[];
+  adherencePercent: number[];
+  atRiskOrders: number[];
+  dates: string[];
 }
 
 export interface CockpitMetrics {
@@ -258,6 +286,7 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
   quality: QualityInsight[];
   orders: OrderInsight[];
   integrationAlert: IntegrationAlert | null;
+  trends: CockpitTrendSeries;
 }> {
   const sourceKind = getProductionOrderSourceKind();
   const sourceSystem =
@@ -290,7 +319,11 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
   ]);
 
   const productNames: Record<string, string> = {};
-  for (const p of products) productNames[p.id] = p.name;
+  const productImages: Record<string, string | null> = {};
+  for (const p of products) {
+    productNames[p.id] = p.name;
+    productImages[p.id] = p.imageUrl ?? null;
+  }
 
   const orderById = new Map(orders.map((o) => [o.id, o]));
 
@@ -355,12 +388,45 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
   for (const lot of activeLots) {
     const timing = timingForLot(lot, openSteps);
     const productName = productNames[lot.productId] ?? lot.productId;
+    const activeStep = pickActiveStep(lot.id, openSteps);
+    const waitingMinutes =
+      activeStep?.status === "READY" && activeStep.readyAt
+        ? Math.max(
+            0,
+            Math.round(
+              (Date.now() - new Date(activeStep.readyAt).getTime()) / 60_000,
+            ),
+          )
+        : null;
+
+    let floorStatus: FloorLotStatus = "waiting";
+    let floorStatusLabel = "aguardando início";
+    if (lot.status === "BLOCKED") {
+      floorStatus = "blocked";
+      floorStatusLabel = "bloqueado";
+    } else if (lot.currentStepStatus === "IN_PROGRESS") {
+      floorStatus = "running";
+      floorStatusLabel = "em andamento";
+    } else if (
+      lot.currentStepStatus === "READY" &&
+      waitingMinutes != null &&
+      waitingMinutes >= 3
+    ) {
+      floorStatus = "stopped";
+      floorStatusLabel = `parado há ${waitingMinutes} min`;
+    } else if (lot.currentStepStatus === "READY") {
+      floorStatus = "waiting";
+      floorStatusLabel = "aguardando início";
+    }
 
     productionLots.push({
       id: lot.id,
       lotCode: lot.lotCode,
+      productId: lot.productId,
       productName,
-      stepLabel: lot.currentStep ? stepTypeLabel(lot.currentStep) : "—",
+      imageUrl: productImages[lot.productId] ?? null,
+      stepType: lot.currentStep ?? null,
+      stepLabel: lot.currentStep ? stepTypeLabel(lot.currentStep) : "sem etapa",
       stepStatusLabel: executionStatusLabel(lot.currentStepStatus, lot.status),
       timing,
       timingLabel: timing
@@ -369,8 +435,15 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
           ? "BLOQUEADO"
           : lot.currentStepStatus === "READY"
             ? "AGUARDANDO INÍCIO"
-            : "—",
+            : lot.currentStepStatus === "IN_PROGRESS"
+              ? "EM ANDAMENTO"
+              : "aguardando início",
       href: `/app/cockpit/production/lots/${lot.id}`,
+      floorStatus,
+      floorStatusLabel,
+      waitingMinutes,
+      productionOrderId: lot.productionOrderId,
+      plannedQuantity: lot.plannedQuantity ?? null,
     });
 
     if (lot.status === "BLOCKED") {
@@ -523,17 +596,21 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
     (o) => o.integrationStatus === "OUTDATED",
   ).length;
 
-  let situationLabel = "SEM LOTES EM PRODUÇÃO";
-  let situationHint = "Liberar OPs no PCP para iniciar o turno";
+  let situationLabel = "LINHA PARADA";
+  let situationHint = "Nenhum lote ativo — liberar OPs no PCP para começar.";
   if (lateCount > 0 || pendingLoss.length > 0 || blockedLots > 0) {
-    situationLabel = "REQUER ATENÇÃO";
-    situationHint = "Há atraso, perda ou bloqueio pendente";
+    const bits: string[] = [];
+    if (lateCount > 0) bits.push(`${lateCount} atraso(s)`);
+    if (blockedLots > 0) bits.push(`${blockedLots} bloqueio(s)`);
+    if (pendingLoss.length > 0) bits.push(`${pendingLoss.length} perda(s) na fila`);
+    situationLabel = "REQUER AÇÃO";
+    situationHint = bits.join(" · ");
   } else if (attentionCount > 0) {
-    situationLabel = "ATENÇÃO NO TEMPO";
-    situationHint = "Lotes próximos do limite da etapa";
+    situationLabel = "NO LIMITE";
+    situationHint = `${attentionCount} lote(s) perto do tempo padrão da etapa.`;
   } else if (activeLots.length > 0) {
-    situationLabel = "EM OPERAÇÃO";
-    situationHint = "Lotes em produção sem alerta crítico";
+    situationLabel = "OPERAÇÃO ESTÁVEL";
+    situationHint = `${activeLots.length} lote(s) em produção sem alerta crítico.`;
   }
 
   const metrics: CockpitMetrics = {
@@ -666,6 +743,7 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
           id: eq.id,
           code: eq.code,
           name: eq.name,
+          type: eq.type,
           typeLabel: equipmentTypeLabel(eq.type),
           displayStatus: "OPERATING" as const,
           lotCode: lot?.lotCode,
@@ -682,6 +760,7 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
         id: eq.id,
         code: eq.code,
         name: eq.name,
+        type: eq.type,
         typeLabel: equipmentTypeLabel(eq.type),
         displayStatus: eq.status,
         stoppedLabel:
@@ -692,14 +771,15 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
       };
     })
     .sort((a, b) => {
-      const rank = (s: EquipmentStatus): number => {
-        if (s === "OPERATING") return 4;
-        if (s === "STOPPED" || s === "MAINTENANCE") return 3;
-        if (s === "UNAVAILABLE") return 2;
-        if (s === "WAITING") return 1;
-        return 0;
+      const lineRank = (t: EquipmentType): number => {
+        if (t === "MIXER") return 0;
+        if (t === "MODELER") return 1;
+        if (t === "PROOFING_CHAMBER") return 2;
+        if (t === "OVEN") return 3;
+        if (t === "PACKAGING_LINE") return 4;
+        return 9;
       };
-      return rank(b.displayStatus) - rank(a.displayStatus) || a.code.localeCompare(b.code);
+      return lineRank(a.type) - lineRank(b.type) || a.code.localeCompare(b.code);
     });
 
   const equipmentOperating = equipmentInsights.filter(
@@ -803,6 +883,12 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
     quality,
     orders: orderInsights.slice(0, 10),
     integrationAlert: buildIntegrationAlert(integrationState),
+    trends: buildTrendSeries({
+      completedSteps,
+      lossSteps,
+      orders,
+      todayDate,
+    }),
   };
 }
 
@@ -827,25 +913,33 @@ function buildIntegrationAlert(
     0,
     Math.round((Date.now() - attemptMs) / 60_000),
   );
+  const hoursSinceAttempt =
+    Math.round((minutesSinceAttempt / 60) * 10) / 10;
   const stale = minutesSinceAttempt >= INTEGRATION_STALE_MINUTES;
   const failed = state.status === "ERROR";
   const partial = state.status === "PARTIAL";
+  const criticalStale = hoursSinceAttempt >= INTEGRATION_CRITICAL_HOURS;
 
   if (!failed && !partial && !stale) return null;
 
   const ago =
     minutesSinceAttempt < 60
       ? `${minutesSinceAttempt} min`
-      : `${Math.round(minutesSinceAttempt / 60)} h`;
+      : hoursSinceAttempt >= 24
+        ? `${Math.round(hoursSinceAttempt)}h (${Math.floor(hoursSinceAttempt / 24)} dia${Math.floor(hoursSinceAttempt / 24) === 1 ? "" : "s"})`
+        : `${Math.round(hoursSinceAttempt)} h`;
 
-  if (failed) {
+  if (failed || criticalStale) {
     return {
       severity: "ERROR",
-      title: "ATENÇÃO · SISTEMA GESTOR",
-      message: `Última sincronização há ${ago} · ${state.lastErrorCount ?? 0} erro(s) · sync falhou`,
+      title: `Sistema gestor sem sincronizar há ${ago}`,
+      message:
+        "Estoque, pedidos e custos exibidos aqui podem estar desatualizados. Isso não é um aviso de rotina — é uma falha de integração.",
       href: "/app/settings/integrations/dev",
-      statusLabel: "ERRO",
+      statusLabel: failed ? "ERRO" : "CRÍTICO",
       minutesSinceAttempt,
+      hoursSinceAttempt,
+      isCritical: true,
     };
   }
 
@@ -857,6 +951,8 @@ function buildIntegrationAlert(
       href: "/app/settings/integrations/dev",
       statusLabel: "PARCIAL",
       minutesSinceAttempt,
+      hoursSinceAttempt,
+      isCritical: false,
     };
   }
 
@@ -867,5 +963,92 @@ function buildIntegrationAlert(
     href: "/app/settings/integrations/dev",
     statusLabel: "ATRASADA",
     minutesSinceAttempt,
+    hoursSinceAttempt,
+    isCritical: false,
+  };
+}
+
+function dayKeysLast7(todayDate: string): string[] {
+  const [y, m, d] = todayDate.split("-").map(Number);
+  const base = new Date(y, m - 1, d);
+  const keys: string[] = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const dt = new Date(base);
+    dt.setDate(base.getDate() - i);
+    keys.push(localDateString(dt));
+  }
+  return keys;
+}
+
+function localDateFromIso(iso: string): string {
+  return localDateString(new Date(iso));
+}
+
+/**
+ * Séries dos últimos 7 dias a partir de apontamentos reais.
+ * Eficiência do dia = proxy (1 - perdas/saída) quando há saída; senão null→0 no spark.
+ * Aderência precisa de plano por dia — só hoje tem plano confiável; dias anteriores usam 0 se sem dado.
+ */
+function buildTrendSeries(input: {
+  completedSteps: LotStepRun[];
+  lossSteps: LotStepRun[];
+  orders: Awaited<ReturnType<typeof listProductionOrders>>;
+  todayDate: string;
+}): CockpitTrendSeries {
+  const dates = dayKeysLast7(input.todayDate);
+  const PROVISIONAL = 12.4;
+
+  const plannedByDay = new Map<string, number>();
+  for (const o of input.orders) {
+    if (o.productionStatus === "CANCELLED" || !o.productionDate) continue;
+    const day = o.productionDate;
+    plannedByDay.set(
+      day,
+      (plannedByDay.get(day) ?? 0) + (o.plannedQuantity ?? 0),
+    );
+  }
+
+  const outputByDay = new Map<string, number>();
+  for (const s of input.completedSteps) {
+    if (s.stepType !== "PACKAGING" || s.outputQuantity == null) continue;
+    const day = localDateFromIso(s.finishedAt ?? s.updatedAt);
+    outputByDay.set(day, (outputByDay.get(day) ?? 0) + s.outputQuantity);
+  }
+
+  const lossByDay = new Map<string, number>();
+  for (const s of input.lossSteps) {
+    const day = localDateFromIso(s.finishedAt ?? s.updatedAt);
+    lossByDay.set(day, (lossByDay.get(day) ?? 0) + (s.lossQuantity ?? 0));
+  }
+
+  const efficiencyPercent: number[] = [];
+  const lossBrl: number[] = [];
+  const adherencePercent: number[] = [];
+  const atRiskOrders: number[] = [];
+
+  for (const day of dates) {
+    const out = outputByDay.get(day) ?? 0;
+    const loss = lossByDay.get(day) ?? 0;
+    const planned = plannedByDay.get(day) ?? 0;
+    lossBrl.push(Math.round(loss * PROVISIONAL));
+    if (out > 0) {
+      const yieldPct = Math.max(0, Math.min(100, ((out - loss) / out) * 100));
+      efficiencyPercent.push(Math.round(yieldPct));
+    } else {
+      efficiencyPercent.push(0);
+    }
+    adherencePercent.push(
+      planned > 0 ? Math.round((out / planned) * 1000) / 10 : 0,
+    );
+    // Sem histórico de "em risco" por dia — spark usa 0; valor atual no card.
+    atRiskOrders.push(0);
+  }
+
+  return {
+    efficiencyPercent,
+    lossBrl,
+    adherencePercent,
+    atRiskOrders,
+    dates,
   };
 }

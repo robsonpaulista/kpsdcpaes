@@ -21,6 +21,8 @@ import {
 import { listOpenStepRuns } from "@/repositories/execution.repository";
 import { listActiveLots } from "@/repositories/lots.repository";
 import { listProducts } from "@/repositories/products.repository";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
+import { buildProductMaps } from "@/lib/products/product-maps";
 import { computeTimingStatus } from "@/services/workflow.service";
 import type {
   LotStepRun,
@@ -73,6 +75,7 @@ type AttentionRow = {
   lotId: string;
   lotCode: string;
   productName: string;
+  imageUrl: string | null;
   stepType: StepType;
   timing: TimingStatus | "READY_HANDOFF";
   detail: string;
@@ -89,6 +92,7 @@ export function DisplayProductionClient() {
   const [lots, setLots] = useState<ProductionLot[]>([]);
   const [steps, setSteps] = useState<LotStepRun[]>([]);
   const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [productImages, setProductImages] = useState<Record<string, string | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [clock, setClock] = useState(() => new Date());
@@ -105,9 +109,9 @@ export function DisplayProductionClient() {
       ]);
       setLots(activeLots);
       setSteps(openSteps);
-      const names: Record<string, string> = {};
-      for (const p of products) names[p.id] = p.name;
-      setProductNames(names);
+      const maps = buildProductMaps(products);
+      setProductNames(maps.names);
+      setProductImages(maps.images);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar");
@@ -171,6 +175,7 @@ export function DisplayProductionClient() {
             lotId: lot.id,
             lotCode: lot.lotCode,
             productName: productNames[lot.productId] ?? lot.productId,
+            imageUrl: productImages[lot.productId] ?? null,
             stepType: lot.currentStep,
             timing: zone === "LATE" ? "LATE" : "READY_HANDOFF",
             detail:
@@ -195,6 +200,7 @@ export function DisplayProductionClient() {
             lotId: lot.id,
             lotCode: lot.lotCode,
             productName: productNames[lot.productId] ?? lot.productId,
+            imageUrl: productImages[lot.productId] ?? null,
             stepType: lot.currentStep,
             timing: zone === "LATE" ? "LATE" : "READY_HANDOFF",
             detail:
@@ -227,6 +233,7 @@ export function DisplayProductionClient() {
             lotId: lot.id,
             lotCode: lot.lotCode,
             productName: productNames[lot.productId] ?? lot.productId,
+            imageUrl: productImages[lot.productId] ?? null,
             stepType: lot.currentStep,
             timing,
             detail: `ATRASADO +${formatDurationClock(-left)}`,
@@ -238,6 +245,7 @@ export function DisplayProductionClient() {
             lotId: lot.id,
             lotCode: lot.lotCode,
             productName: productNames[lot.productId] ?? lot.productId,
+            imageUrl: productImages[lot.productId] ?? null,
             stepType: lot.currentStep,
             timing,
             detail:
@@ -263,7 +271,7 @@ export function DisplayProductionClient() {
       handoff,
       attentionRows: attentionRows.slice(0, 10),
     };
-  }, [lots, steps, tick, productNames]);
+  }, [lots, steps, tick, productNames, productImages]);
 
   // Rotação lenta visão geral ↔ atenção (Doc 02 §62) — só se houver alertas
   useEffect(() => {
@@ -390,7 +398,14 @@ export function DisplayProductionClient() {
                     className={`rounded-[24px] border px-7 py-6 ${toneBorder(row.timing)}`}
                   >
                     <div className="flex flex-wrap items-end justify-between gap-5">
-                      <div>
+                      <div className="flex min-w-0 items-start gap-4">
+                        <ProductThumbnail
+                          imageUrl={row.imageUrl}
+                          alt={row.productName}
+                          size="md"
+                          className="!size-16 !rounded-[14px] border-white/15"
+                        />
+                        <div>
                         <p className="text-3xl font-bold tabular-nums tracking-tight lg:text-4xl">
                           {row.lotCode}
                         </p>
@@ -401,6 +416,7 @@ export function DisplayProductionClient() {
                             · {stepTypeLabel(row.stepType).toUpperCase()}
                           </span>
                         </p>
+                        </div>
                       </div>
                       <p
                         className={`text-3xl font-bold tabular-nums tracking-tight lg:text-4xl ${
@@ -553,6 +569,14 @@ export function DisplayProductionClient() {
                               key={lot.id}
                               className={`display-lot ${toneBorder(timing)}`}
                             >
+                              <div className="flex items-start gap-3">
+                                <ProductThumbnail
+                                  imageUrl={productImages[lot.productId]}
+                                  alt={productNames[lot.productId] ?? lot.productId}
+                                  size="sm"
+                                  className="!rounded-[10px] border-white/15"
+                                />
+                                <div className="min-w-0 flex-1">
                               <p className="text-base font-semibold leading-snug text-white lg:text-lg">
                                 {productNames[lot.productId] ?? lot.productId}
                               </p>
@@ -568,6 +592,8 @@ export function DisplayProductionClient() {
                                     : "—"}
                                 </p>
                               )}
+                                </div>
+                              </div>
                             </li>
                           );
                         })

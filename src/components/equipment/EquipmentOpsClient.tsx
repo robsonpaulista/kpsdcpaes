@@ -3,11 +3,20 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccessDeniedNote } from "@/components/access/AccessDeniedNote";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
+import { CockpitPageHeader } from "@/components/shared/CockpitUi";
 import {
-  CockpitEmpty,
-  CockpitPageHeader,
-  CockpitSegments,
-} from "@/components/shared/CockpitUi";
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  SegmentedControl,
+  StatTile,
+  StatusBadge,
+  equipmentStatusTone,
+} from "@/components/ui";
+import { getStepDefinition, stepTypeLabel } from "@/domain/production/process-route";
 import { getStation } from "@/domain/production/stations";
 import { useFactoryLiveReload } from "@/hooks/useFactoryLiveReload";
 import { useFactoryRole } from "@/hooks/useFactoryRole";
@@ -16,16 +25,41 @@ import {
   equipmentStatusLabel,
   equipmentTypeLabel,
 } from "@/lib/labels/equipment";
+import {
+  formatDurationClock,
+  remainingMs,
+  timingToneClass,
+} from "@/lib/labels/timing";
+import { buildProductMaps } from "@/lib/products/product-maps";
 import { listOpenStepRuns } from "@/repositories/execution.repository";
 import { listEquipment } from "@/repositories/equipment.repository";
 import { listActiveLots } from "@/repositories/lots.repository";
+import { listProductionOrders } from "@/repositories/orders.repository";
+import { listProducts } from "@/repositories/products.repository";
 import {
   releaseEquipment,
   stopEquipment,
 } from "@/services/equipment-ops.service";
-import type { Equipment, EquipmentStatus } from "@/types/equipment";
+import { computeTimingStatus } from "@/services/workflow.service";
+import type { Equipment } from "@/types/equipment";
+import type { StepType, TimingStatus } from "@/types/production";
 
 type Filter = "all" | "operating" | "stopped" | "available";
+
+type EquipmentRun = {
+  lotId: string;
+  lotCode: string;
+  productId: string;
+  productName: string;
+  imageUrl: string | null;
+  plannedQuantity: number | null;
+  stepType: StepType;
+  stepLabel: string;
+  orderNumber: string | null;
+  startedAt: string | null;
+  expectedFinishAt: string | null;
+  timing: TimingStatus | null;
+};
 
 function stoppedMinutes(stoppedAt?: string): number | null {
   if (!stoppedAt) return null;
@@ -35,19 +69,9 @@ function stoppedMinutes(stoppedAt?: string): number | null {
   );
 }
 
-function statusTone(status: EquipmentStatus): string {
-  switch (status) {
-    case "OPERATING":
-      return "text-dc-orange";
-    case "STOPPED":
-    case "MAINTENANCE":
-    case "UNAVAILABLE":
-      return "text-danger";
-    case "AVAILABLE":
-      return "text-success";
-    default:
-      return "text-dc-text-secondary";
-  }
+function formatUnits(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return `${value.toLocaleString("pt-BR")} un.`;
 }
 
 /**
@@ -57,17 +81,17 @@ export function EquipmentOpsClient() {
   const { can } = useFactoryRole();
   const canManage = can("manageEquipment");
   const [items, setItems] = useState<Equipment[]>([]);
-  const [lotByEquipment, setLotByEquipment] = useState<
-    Record<string, { lotId: string; lotCode: string }>
+  const [runByEquipment, setRunByEquipment] = useState<
+    Record<string, EquipmentRun>
   >({});
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [stopReasonDraft, setStopReasonDraft] = useState<Record<string, string>>(
-    {},
-  );
+  const [stopReasonDraft, setStopReasonDraft] = useState<
+    Record<string, string>
+  >({});
   const [tick, setTick] = useState(0);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
@@ -76,23 +100,53 @@ export function EquipmentOpsClient() {
     try {
       if (!isFirebaseConfigured()) throw new Error("Firebase não configurado.");
       const db = getFirestoreDb();
-      const [equipment, steps, lots] = await Promise.all([
+      const [equipment, steps, lots, products, orders] = await Promise.all([
         listEquipment(db),
         listOpenStepRuns(db),
         listActiveLots(db),
+        listProducts(db),
+        listProductionOrders(db),
       ]);
       setItems(equipment.filter((e) => e.active));
-      const lotCodeById: Record<string, string> = {};
-      for (const lot of lots) lotCodeById[lot.id] = lot.lotCode;
-      const map: Record<string, { lotId: string; lotCode: string }> = {};
+
+      const maps = buildProductMaps(products);
+      const lotById = new Map(lots.map((l) => [l.id, l]));
+      const orderById = new Map(orders.map((o) => [o.id, o]));
+
+      const runs: Record<string, EquipmentRun> = {};
       for (const step of steps) {
         if (step.status !== "IN_PROGRESS" || !step.equipmentId) continue;
-        map[step.equipmentId] = {
-          lotId: step.lotId,
-          lotCode: lotCodeById[step.lotId] ?? step.lotId,
+        const lot = lotById.get(step.lotId);
+        if (!lot) continue;
+        const order = orderById.get(lot.productionOrderId);
+        const timing =
+          step.startedAt && step.expectedFinishAt
+            ? computeTimingStatus(
+                step.startedAt,
+                step.expectedFinishAt,
+                step.toleranceMinutes ??
+                  getStepDefinition(step.stepType, lot.processRoute)
+                    ?.lateToleranceMinutes ??
+                  0,
+              )
+            : null;
+
+        runs[step.equipmentId] = {
+          lotId: lot.id,
+          lotCode: lot.lotCode,
+          productId: lot.productId,
+          productName: maps.names[lot.productId] ?? lot.productId,
+          imageUrl: maps.images[lot.productId] ?? null,
+          plannedQuantity: lot.plannedQuantity ?? null,
+          stepType: step.stepType,
+          stepLabel: stepTypeLabel(step.stepType),
+          orderNumber: order?.externalOrderNumber ?? null,
+          startedAt: step.startedAt ?? null,
+          expectedFinishAt: step.expectedFinishAt ?? null,
+          timing,
         };
       }
-      setLotByEquipment(map);
+      setRunByEquipment(runs);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar");
       if (!opts?.silent) setItems([]);
@@ -108,27 +162,35 @@ export function EquipmentOpsClient() {
   useFactoryLiveReload(load);
 
   useEffect(() => {
-    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
+    const id = window.setInterval(() => setTick((t) => t + 1), 1_000);
     return () => window.clearInterval(id);
   }, []);
 
   void tick;
 
+  const isOperating = useCallback(
+    (eq: Equipment) =>
+      eq.status === "OPERATING" || Boolean(runByEquipment[eq.id]),
+    [runByEquipment],
+  );
+
   const counts = useMemo(() => {
-    const operating = items.filter((e) => e.status === "OPERATING").length;
+    const operating = items.filter((e) => isOperating(e)).length;
     const stopped = items.filter(
       (e) =>
         e.status === "STOPPED" ||
         e.status === "MAINTENANCE" ||
         e.status === "UNAVAILABLE",
     ).length;
-    const available = items.filter((e) => e.status === "AVAILABLE").length;
+    const available = items.filter(
+      (e) => e.status === "AVAILABLE" && !runByEquipment[e.id],
+    ).length;
     return { operating, stopped, available, total: items.length };
-  }, [items]);
+  }, [items, isOperating, runByEquipment]);
 
   const visible = useMemo(() => {
     if (filter === "operating") {
-      return items.filter((e) => e.status === "OPERATING");
+      return items.filter((e) => isOperating(e));
     }
     if (filter === "stopped") {
       return items.filter(
@@ -139,10 +201,12 @@ export function EquipmentOpsClient() {
       );
     }
     if (filter === "available") {
-      return items.filter((e) => e.status === "AVAILABLE");
+      return items.filter(
+        (e) => e.status === "AVAILABLE" && !runByEquipment[e.id],
+      );
     }
     return items;
-  }, [items, filter]);
+  }, [items, filter, isOperating, runByEquipment]);
 
   async function handleStop(eq: Equipment) {
     setBusyId(eq.id);
@@ -182,31 +246,23 @@ export function EquipmentOpsClient() {
         title="Equipamentos"
         description="Status operacional · parada tira o recurso da fila do Floor."
         actions={
-          <Link
-            href="/app/settings/equipment"
-            className="dc-btn-secondary h-10 px-3 text-sm"
-          >
+          <Button href="/app/settings/equipment" variant="secondary" size="sm">
             Cadastro / semear →
-          </Link>
+          </Button>
         }
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="dc-panel px-4 py-4">
-          <p className="dc-eyebrow">Operando</p>
-          <p className="dc-metric mt-2 text-dc-orange">{counts.operating}</p>
-        </div>
-        <div className="dc-panel px-4 py-4">
-          <p className="dc-eyebrow">Parados</p>
-          <p className="dc-metric mt-2 text-danger">{counts.stopped}</p>
-        </div>
-        <div className="dc-panel px-4 py-4">
-          <p className="dc-eyebrow">Disponíveis</p>
-          <p className="dc-metric mt-2 text-success">{counts.available}</p>
-        </div>
+        <StatTile label="Operando" value={counts.operating} tone="ink" />
+        <StatTile
+          label="Parados"
+          value={counts.stopped}
+          tone={counts.stopped > 0 ? "critical" : "ink"}
+        />
+        <StatTile label="Disponíveis" value={counts.available} tone="ink" />
       </div>
 
-      <CockpitSegments
+      <SegmentedControl
         activeId={filter}
         onSelect={(id) => setFilter(id as Filter)}
         items={[
@@ -217,30 +273,20 @@ export function EquipmentOpsClient() {
         ]}
       />
 
-      {message ? (
-        <p className="rounded-[12px] border border-success/25 bg-success-soft px-4 py-2.5 text-sm text-success">
-          {message}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="rounded-[12px] border border-danger/25 bg-danger-soft px-4 py-2.5 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
+      {message ? <Alert tone="good">{message}</Alert> : null}
+      {error ? <Alert tone="critical">{error}</Alert> : null}
       {!canManage ? (
         <AccessDeniedNote action="parar/liberar equipamentos" />
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-dc-text-secondary">Carregando…</p>
+        <p className="text-sm text-[var(--ink-2)]">Carregando…</p>
       ) : visible.length === 0 ? (
-        <CockpitEmpty
+        <EmptyState
           title="Nenhum equipamento neste filtro"
           detail="Semee o catálogo ou mude o filtro."
           action={
-            <Link href="/app/settings/equipment" className="dc-btn-primary">
-              Semear catálogo →
-            </Link>
+            <Button href="/app/settings/equipment">Semear catálogo →</Button>
           }
         />
       ) : (
@@ -249,12 +295,12 @@ export function EquipmentOpsClient() {
             const station = eq.stationId
               ? getStation(eq.stationId)
               : undefined;
-            const currentLot = lotByEquipment[eq.id];
+            const run = runByEquipment[eq.id];
             const mins = stoppedMinutes(eq.stoppedAt);
             const canStop =
               canManage &&
               eq.status !== "STOPPED" &&
-              eq.status !== "OPERATING" &&
+              !isOperating(eq) &&
               eq.status !== "MAINTENANCE" &&
               eq.status !== "UNAVAILABLE";
             const canRelease =
@@ -266,99 +312,158 @@ export function EquipmentOpsClient() {
               eq.status === "STOPPED" ||
               eq.status === "MAINTENANCE" ||
               eq.status === "UNAVAILABLE";
+            const operating = isOperating(eq);
+
+            let timerLine: string | null = null;
+            let timerClass = "text-[var(--ink-2)]";
+            if (run?.expectedFinishAt) {
+              const left = remainingMs(run.expectedFinishAt);
+              timerLine =
+                left >= 0
+                  ? formatDurationClock(left)
+                  : `+${formatDurationClock(-left)}`;
+              if (run.timing) timerClass = timingToneClass(run.timing);
+            }
 
             return (
-              <li
-                key={eq.id}
-                className={`dc-panel px-5 py-4 ${
-                  stopped ? "border-danger/25 bg-danger/5" : ""
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <Link
-                      href={`/app/equipment/${encodeURIComponent(eq.id)}`}
-                      className="text-sm font-semibold tabular-nums tracking-tight text-dc-orange"
-                    >
-                      {eq.code}
-                    </Link>
-                    <p className="mt-0.5 text-sm text-dc-text">{eq.name}</p>
-                    <p className="mt-0.5 text-xs text-dc-text-muted">
-                      {equipmentTypeLabel(eq.type)}
-                      {station ? ` · ${station.label}` : ""}
-                    </p>
-                  </div>
-                  <p
-                    className={`text-xs font-semibold ${statusTone(eq.status)}`}
-                  >
-                    {equipmentStatusLabel(eq.status)}
-                    {mins != null && eq.status === "STOPPED"
-                      ? ` · ${mins} min`
-                      : ""}
-                  </p>
-                </div>
-
-                {currentLot ? (
-                  <p className="mt-2 text-xs text-dc-text-secondary">
-                    Lote atual{" "}
-                    <Link
-                      href={`/app/cockpit/production/lots/${encodeURIComponent(currentLot.lotId)}`}
-                      className="font-semibold tabular-nums text-dc-orange"
-                    >
-                      {currentLot.lotCode}
-                    </Link>
-                  </p>
-                ) : null}
-
-                {eq.stopReason ? (
-                  <p className="mt-1 text-xs text-dc-text-muted">
-                    Motivo: {eq.stopReason}
-                  </p>
-                ) : null}
-
-                {canManage ? (
-                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-dc-border/60 pt-4">
-                    {canStop ? (
-                      <>
-                        <input
-                          type="text"
-                          placeholder="Motivo (opcional)"
-                          value={stopReasonDraft[eq.id] ?? ""}
-                          onChange={(e) =>
-                            setStopReasonDraft((prev) => ({
-                              ...prev,
-                              [eq.id]: e.target.value,
-                            }))
-                          }
-                          className="h-10 min-w-[10rem] flex-1 rounded-[12px] border border-dc-border bg-dc-bg px-3 text-xs outline-none focus:border-dc-orange"
-                        />
-                        <button
-                          type="button"
-                          disabled={busyId === eq.id}
-                          onClick={() => void handleStop(eq)}
-                          className="h-10 rounded-[12px] border border-danger/40 px-3 text-xs font-semibold text-danger disabled:opacity-50"
-                        >
-                          Parar
-                        </button>
-                      </>
-                    ) : null}
-                    {canRelease ? (
-                      <button
-                        type="button"
-                        disabled={busyId === eq.id}
-                        onClick={() => void handleRelease(eq)}
-                        className="dc-btn-primary h-10 px-3 text-xs disabled:opacity-50"
+              <li key={eq.id}>
+                <Card
+                  className="px-5 py-4"
+                  tone={
+                    stopped
+                      ? "critical"
+                      : operating
+                        ? "good"
+                        : "default"
+                  }
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/app/equipment/${encodeURIComponent(eq.id)}`}
+                        className="font-mono text-sm font-semibold tabular-nums tracking-tight text-[var(--ink)] transition-colors duration-150 hover:text-[var(--accent-strong)]"
                       >
-                        Liberar
-                      </button>
-                    ) : null}
-                    {eq.status === "OPERATING" ? (
-                      <p className="text-[11px] text-dc-text-muted">
-                        Em uso — finalize a etapa no Floor para parar.
+                        {eq.code}
+                      </Link>
+                      <p className="mt-0.5 text-sm text-[var(--ink)]">
+                        {eq.name}
                       </p>
-                    ) : null}
+                      <p className="mt-0.5 text-xs text-[var(--muted)]">
+                        {equipmentTypeLabel(eq.type)}
+                        {station ? ` · ${station.label}` : ""}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      status={
+                        operating
+                          ? "good"
+                          : equipmentStatusTone(eq.status)
+                      }
+                    >
+                      {operating
+                        ? "OPERANDO"
+                        : equipmentStatusLabel(eq.status)}
+                      {mins != null && eq.status === "STOPPED"
+                        ? ` · ${mins} min`
+                        : ""}
+                    </StatusBadge>
                   </div>
-                ) : null}
+
+                  {run ? (
+                    <div className="mt-3 flex gap-3 rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
+                      <ProductThumbnail
+                        imageUrl={run.imageUrl}
+                        alt={run.productName}
+                        size="sm"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="min-w-0 truncate text-sm font-semibold text-[var(--ink)]">
+                            {run.productName}
+                          </p>
+                          {timerLine ? (
+                            <p
+                              className={`shrink-0 font-mono text-base font-bold tabular-nums tracking-tight ${timerClass}`}
+                            >
+                              {timerLine}
+                            </p>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 text-xs text-[var(--ink-2)]">
+                          <Link
+                            href={`/app/cockpit/production/lots/${encodeURIComponent(run.lotId)}`}
+                            className="font-mono font-semibold tabular-nums text-[var(--accent)] hover:underline"
+                          >
+                            {run.lotCode}
+                          </Link>
+                          {run.orderNumber ? ` · OP ${run.orderNumber}` : ""}
+                          {` · ${run.stepLabel}`}
+                        </p>
+                        <p className="mt-0.5 text-xs text-[var(--muted)]">
+                          {run.plannedQuantity != null
+                            ? `Qtde ${formatUnits(run.plannedQuantity)}`
+                            : "Sem qtde planejada"}
+                          {run.timing === "LATE"
+                            ? " · Atraso"
+                            : run.timing === "ATTENTION"
+                              ? " · Atenção"
+                              : run.timing === "ON_TIME"
+                                ? " · No prazo"
+                                : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {eq.stopReason ? (
+                    <p className="mt-2 text-xs text-[var(--muted)]">
+                      Motivo: {eq.stopReason}
+                    </p>
+                  ) : null}
+
+                  {canManage ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
+                      {canStop ? (
+                        <>
+                          <Input
+                            type="text"
+                            placeholder="Motivo (opcional)"
+                            value={stopReasonDraft[eq.id] ?? ""}
+                            onChange={(e) =>
+                              setStopReasonDraft((prev) => ({
+                                ...prev,
+                                [eq.id]: e.target.value,
+                              }))
+                            }
+                            className="min-w-[10rem] flex-1 text-xs"
+                          />
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={busyId === eq.id}
+                            onClick={() => void handleStop(eq)}
+                          >
+                            Parar
+                          </Button>
+                        </>
+                      ) : null}
+                      {canRelease ? (
+                        <Button
+                          size="sm"
+                          disabled={busyId === eq.id}
+                          onClick={() => void handleRelease(eq)}
+                        >
+                          Liberar
+                        </Button>
+                      ) : null}
+                      {operating ? (
+                        <p className="text-[11px] text-[var(--muted)]">
+                          Em uso — finalize a etapa no Floor para liberar.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </Card>
               </li>
             );
           })}

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { AccessDeniedNote } from "@/components/access/AccessDeniedNote";
 import { CockpitPageHeader } from "@/components/shared/CockpitUi";
+import { Alert, Button, Card, StatTile } from "@/components/ui";
 import { useFactoryRole } from "@/hooks/useFactoryRole";
 import { useQualityBoard } from "@/hooks/useQualityBoard";
 
@@ -23,23 +23,16 @@ export function QualityHubClient() {
   return (
     <div className="space-y-6">
       <CockpitPageHeader
-        eyebrow="Qualidade"
-        title="Visão geral"
+        title="Qualidade"
         description="Perdas do chão entram na fila. A ocorrência é o registro do setor."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/app/settings/loss-reasons"
-              className="dc-btn-secondary h-10 px-3 text-sm"
-            >
+            <Button href="/app/settings/loss-reasons" variant="secondary" size="sm">
               Motivos de perda →
-            </Link>
-            <Link
-              href="/app/settings/qa"
-              className="dc-btn-secondary h-10 px-3 text-sm"
-            >
+            </Button>
+            <Button href="/app/settings/qa" variant="secondary" size="sm">
               QA →
-            </Link>
+            </Button>
           </div>
         }
       />
@@ -47,73 +40,62 @@ export function QualityHubClient() {
         <AccessDeniedNote action="registrar/liberar ocorrências" />
       ) : null}
 
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      {error ? <Alert tone="critical">{error}</Alert> : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="dc-panel px-4 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dc-text-muted">
-            Perdas sem ocorrência
-          </p>
-          <p className="dc-metric mt-2 text-dc-text">
-            {loading ? "…" : pendingSignals.length}
-          </p>
-          <Link
-            href="/app/quality/losses"
-            className="mt-3 inline-block text-sm font-semibold text-dc-orange"
-          >
+        <Card className="px-4 py-4">
+          <StatTile
+            label="Perdas sem ocorrência"
+            value={loading ? "…" : pendingSignals.length}
+            tone={
+              !loading && pendingSignals.length > 0 ? "warning" : "ink"
+            }
+            className="border-0 p-0"
+          />
+          <Button href="/app/quality/losses" variant="ghost" size="sm" className="mt-3 px-0">
             Abrir fila →
-          </Link>
-        </div>
-        <div className="dc-panel px-4 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dc-text-muted">
-            Ocorrências abertas
-          </p>
-          <p className="dc-metric mt-2 text-dc-text">
-            {loading ? "…" : openCount}
-          </p>
-          <Link
-            href="/app/quality/incidents"
-            className="mt-3 inline-block text-sm font-semibold text-dc-orange"
-          >
+          </Button>
+        </Card>
+        <Card className="px-4 py-4">
+          <StatTile
+            label="Ocorrências abertas"
+            value={loading ? "…" : openCount}
+            className="border-0 p-0"
+          />
+          <Button href="/app/quality/incidents" variant="ghost" size="sm" className="mt-3 px-0">
             Ver ocorrências →
-          </Link>
-        </div>
-        <div className="dc-panel px-4 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dc-text-muted">
-            Lotes com bloqueio
-          </p>
-          <p className="dc-metric mt-2 text-dc-text">
-            {loading ? "…" : blockedOpen}
-          </p>
-          <Link
-            href="/app/quality/incidents"
-            className="mt-3 inline-block text-sm font-semibold text-dc-orange"
-          >
+          </Button>
+        </Card>
+        <Card className="px-4 py-4">
+          <StatTile
+            label="Lotes com bloqueio"
+            value={loading ? "…" : blockedOpen}
+            tone={!loading && blockedOpen > 0 ? "critical" : "ink"}
+            className="border-0 p-0"
+          />
+          <Button href="/app/quality/incidents" variant="ghost" size="sm" className="mt-3 px-0">
             Liberar / resolver →
-          </Link>
-        </div>
+          </Button>
+        </Card>
       </div>
 
-      <div className="dc-panel border-dashed bg-dc-surface-secondary/40 px-4 py-4">
-        <p className="text-sm font-semibold text-dc-text">
+      <Card className="border-dashed bg-[var(--surface-2)] px-4 py-4">
+        <p className="text-sm font-semibold text-[var(--ink)]">
           Disponível após validação da fábrica
         </p>
-        <p className="mt-1 text-xs text-dc-text-secondary">
+        <p className="mt-1 text-xs text-[var(--ink-2)]">
           Retrabalho e reprovações entram quando os critérios oficiais forem
           definidos. Até lá, use perdas e ocorrências.
         </p>
-        <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <Link href="/app/quality/rework" className="font-semibold text-dc-orange">
+        <div className="mt-3 flex flex-wrap gap-3">
+          <Button href="/app/quality/rework" variant="ghost" size="sm" className="px-0">
             Retrabalho →
-          </Link>
-          <Link
-            href="/app/quality/rejections"
-            className="font-semibold text-dc-orange"
-          >
+          </Button>
+          <Button href="/app/quality/rejections" variant="ghost" size="sm" className="px-0">
             Reprovações →
-          </Link>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

@@ -34,13 +34,11 @@ export function buildDemoLotCode(
   productionDate: string,
   sequence: number,
 ): string {
-  const prefix = productCode.includes("HAMB")
-    ? "PH"
-    : productCode.includes("HOT")
-      ? "HD"
-      : productCode.includes("FORMA")
-        ? "PF"
-        : "LT";
+  const upper = productCode.toUpperCase();
+  let prefix = "LT";
+  if (upper.includes("MINI")) prefix = "MN";
+  else if (upper.includes("BISNAG")) prefix = "BN";
+  else if (upper.includes("HB")) prefix = "HB";
   const compact = productionDate.replaceAll("-", "").slice(2); // YYMMDD
   return `${prefix}${compact}${String(sequence).padStart(2, "0")}`;
 }

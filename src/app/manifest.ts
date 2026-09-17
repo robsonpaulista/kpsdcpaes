@@ -6,8 +6,8 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "DC Pães · Factory OS",
-    short_name: "DC Factory",
+    name: "KPS DC Pães",
+    short_name: "KPS DC Pães",
     description:
       "Sistema operacional da fábrica DC Pães — Cockpit, Floor e Display.",
     start_url: "/app/floor",
@@ -15,7 +15,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     orientation: "any",
     background_color: "#f7f5f2",
-    theme_color: "#e85d04",
+    theme_color: "#563f30",
     lang: "pt-BR",
     categories: ["business", "productivity"],
     icons: [

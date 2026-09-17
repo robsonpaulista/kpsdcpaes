@@ -9,7 +9,10 @@ import {
 import { COLLECTIONS } from "@/lib/firebase/collections";
 import { omitUndefined } from "@/lib/firestore/omit-undefined";
 import type { Product } from "@/types/production";
-import { MOCK_FACTORY_PRODUCTS } from "@/integrations/production-orders/fixtures/mock-orders";
+import {
+  FACTORY_PRODUCT_CATALOG,
+  LEGACY_MOCK_PRODUCT_CODES,
+} from "@/domain/production/product-catalog-seed";
 
 function productsCol(db: Firestore) {
   return collection(db, COLLECTIONS.products);
@@ -37,6 +40,7 @@ export async function upsertProduct(
     active: product.active ?? true,
     unit: product.unit,
     nominalWeight: product.nominalWeight,
+    imageUrl: product.imageUrl,
     processRoute: product.processRoute,
     createdAt: existing.exists()
       ? ((existing.data().createdAt as string) ?? now)
@@ -48,21 +52,31 @@ export async function upsertProduct(
   return payload;
 }
 
+/** Semear catálogo DC Pães (imagens reais) e desativar SKUs mock antigos. */
 export async function seedMockFactoryProducts(db: Firestore): Promise<Product[]> {
   const seeded: Product[] = [];
-  for (const p of MOCK_FACTORY_PRODUCTS) {
+  for (const p of FACTORY_PRODUCT_CATALOG) {
     const product = await upsertProduct(db, {
       code: p.code,
       name: p.name,
       externalProductCode: p.externalProductCode,
-      nominalWeight: p.nominalWeight,
+      imageUrl: p.imageUrl,
       unit: p.unit,
       active: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     });
     seeded.push(product);
   }
+
+  for (const code of LEGACY_MOCK_PRODUCT_CODES) {
+    const existing = await getProductById(db, code);
+    if (existing?.active) {
+      await upsertProduct(db, {
+        ...existing,
+        active: false,
+      });
+    }
+  }
+
   return seeded;
 }
 

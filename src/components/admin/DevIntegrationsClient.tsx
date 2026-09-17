@@ -8,8 +8,9 @@ import {
   isFirebaseConfigured,
 } from "@/lib/firebase/client";
 import { getProductionOrderSourceKind } from "@/integrations/production-orders/production-order-source";
-import { MOCK_EXTERNAL_ORDERS } from "@/integrations/production-orders/fixtures/mock-orders";
+import { getMockExternalOrders } from "@/integrations/production-orders/fixtures/mock-orders";
 import { SyncOrdersButton } from "@/components/admin/SyncOrdersButton";
+import { ResetDemoProductionButton } from "@/components/admin/ResetDemoProductionButton";
 import { GoLivePreflight } from "@/components/admin/GoLivePreflight";
 import { CockpitPageHeader } from "@/components/shared/CockpitUi";
 
@@ -48,6 +49,7 @@ export function DevIntegrationsClient() {
   const projectId = getPublicProjectId();
   const sourceKind = getProductionOrderSourceKind();
   const firebaseReady = firebaseStatus === "ready" && isFirebaseConfigured();
+  const mockOrders = getMockExternalOrders();
 
   return (
     <div className="space-y-6">
@@ -103,7 +105,7 @@ export function DevIntegrationsClient() {
         <div className="dc-panel px-4 py-4">
           <p className="dc-eyebrow">Ordens mock</p>
           <p className="dc-metric mt-2 text-dc-text">
-            {MOCK_EXTERNAL_ORDERS.length}
+            {mockOrders.length}
           </p>
           <p className="mt-1 text-xs text-dc-text-secondary">
             Exemplos na fonte atual
@@ -133,7 +135,7 @@ export function DevIntegrationsClient() {
           </p>
         </div>
         <ul className="divide-y divide-dc-border/70">
-          {MOCK_EXTERNAL_ORDERS.map((op) => (
+          {mockOrders.map((op) => (
             <li
               key={op.externalId}
               className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
@@ -152,6 +154,20 @@ export function DevIntegrationsClient() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="dc-panel border-dashed px-5 py-5">
+        <h2 className="text-sm font-semibold tracking-tight text-dc-text">
+          Reset produção demo (DC Pães)
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm text-dc-text-secondary">
+          Apaga OPs, lotes, etapas e eventos antigos; sincroniza o catálogo com
+          fotos reais e cria lotes já em etapas do fluxo (amassamento,
+          fermentação, forno, embalagem…).
+        </p>
+        <div className="mt-4">
+          <ResetDemoProductionButton />
+        </div>
       </section>
 
       <section className="dc-panel border-dashed px-5 py-5">

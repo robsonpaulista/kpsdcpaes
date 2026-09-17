@@ -7,10 +7,8 @@ import {
   getStepDefinition,
   stepTypeLabel,
 } from "@/domain/production/process-route";
-import {
-  CockpitEmpty,
-  CockpitPageHeader,
-} from "@/components/shared/CockpitUi";
+import { CockpitPageHeader } from "@/components/shared/CockpitUi";
+import { Alert, Button, EmptyState, StatusBadge } from "@/components/ui";
 import { useFactoryLiveReload } from "@/hooks/useFactoryLiveReload";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
 import {
@@ -22,6 +20,8 @@ import {
 import { listOpenStepRuns } from "@/repositories/execution.repository";
 import { listActiveLots } from "@/repositories/lots.repository";
 import { listProducts } from "@/repositories/products.repository";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
+import { buildProductMaps } from "@/lib/products/product-maps";
 import { computeTimingStatus } from "@/services/workflow.service";
 import type { LotStepRun, ProductionLot, StepType } from "@/types/production";
 
@@ -40,6 +40,9 @@ export function ProductionKanban() {
   const [lots, setLots] = useState<ProductionLot[]>([]);
   const [steps, setSteps] = useState<LotStepRun[]>([]);
   const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [productImages, setProductImages] = useState<
+    Record<string, string | null>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -57,11 +60,9 @@ export function ProductionKanban() {
       ]);
       setLots(activeLots);
       setSteps(openSteps);
-      const names: Record<string, string> = {};
-      for (const p of products) {
-        names[p.id] = p.name;
-      }
-      setProductNames(names);
+      const maps = buildProductMaps(products);
+      setProductNames(maps.names);
+      setProductImages(maps.images);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar");
       if (!opts?.silent) {
@@ -107,65 +108,54 @@ export function ProductionKanban() {
         actions={
           <>
             {live ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-xs font-bold text-success">
-                <span className="size-1.5 animate-pulse rounded-full bg-success" />
+              <StatusBadge status="good" className="gap-1.5 normal-case tracking-normal">
+                <span className="size-1.5 rounded-full bg-[var(--good)] dc-live-dot" />
                 Ao vivo
-              </span>
+              </StatusBadge>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="dc-btn-secondary h-10 px-4 text-sm"
-            >
+            <Button variant="secondary" size="sm" onClick={() => void load()}>
               Atualizar
-            </button>
-            <Link
-              href="/display/production"
-              className="text-sm font-semibold text-dc-orange"
-            >
+            </Button>
+            <Button href="/display/production" variant="ghost" size="sm">
               Display TV →
-            </Link>
+            </Button>
           </>
         }
       />
 
       {loading ? (
-        <p className="text-sm text-dc-text-secondary">Carregando produção…</p>
+        <p className="text-sm text-[var(--ink-2)]">Carregando produção…</p>
       ) : error ? (
-        <p className="text-sm text-danger">{error}</p>
+        <Alert tone="critical">{error}</Alert>
       ) : lots.length === 0 ? (
-        <CockpitEmpty
+        <EmptyState
           title="Nenhum lote ativo"
           detail="Liberar OPs no PCP e executar no chão de fábrica gera o fluxo aqui."
-          action={
-            <Link href="/app/pcp" className="dc-btn-primary h-11 px-5 text-sm">
-              Ir ao PCP
-            </Link>
-          }
+          action={<Button href="/app/pcp" size="lg">Ir ao PCP</Button>}
         />
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2">
           {columns.map((col) => (
             <section
               key={col.stepType}
-              className="dc-panel w-[220px] shrink-0 p-3 lg:w-[240px]"
+              className="w-[220px] shrink-0 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3 lg:w-[240px]"
             >
               <header>
                 <div className="flex items-baseline justify-between gap-2">
-                  <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-dc-text-muted">
+                  <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">
                     {stepTypeLabel(col.stepType as StepType)}
                   </h2>
-                  <span className="rounded-full bg-dc-surface-secondary px-2 py-0.5 text-xs font-bold tabular-nums text-dc-text">
+                  <span className="rounded-md bg-[var(--surface-2)] px-2 py-0.5 font-mono text-xs font-bold tabular-nums text-[var(--ink)]">
                     {col.lots.length}
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] text-dc-text-muted">
+                <p className="mt-1 text-[11px] text-[var(--muted)]">
                   Meta {formatStandardMinutes(col.standardDurationMinutes)}
                 </p>
               </header>
               <ul className="mt-3 space-y-2">
                 {col.lots.length === 0 ? (
-                  <li className="rounded-[12px] border border-dashed border-dc-border px-2.5 py-3 text-center text-xs text-dc-text-muted">
+                  <li className="rounded-[12px] border border-dashed border-[var(--border)] px-2.5 py-3 text-center text-xs text-[var(--muted)]">
                     Fila vazia
                   </li>
                 ) : (
@@ -180,7 +170,7 @@ export function ProductionKanban() {
                       step.expectedFinishAt;
 
                     let timerLine: string | null = null;
-                    let timerClass = "text-dc-text-secondary";
+                    let timerClass = "text-[var(--ink-2)]";
 
                     if (inProgress && step.startedAt && step.expectedFinishAt) {
                       const left = remainingMs(step.expectedFinishAt);
@@ -200,25 +190,32 @@ export function ProductionKanban() {
                       <li key={lot.id}>
                         <Link
                           href={`/app/cockpit/production/lots/${lot.id}`}
-                          className="block rounded-[14px] border border-dc-border-soft bg-dc-surface-secondary/80 px-3 py-2.5 transition hover:border-dc-orange/30 hover:bg-dc-orange-soft"
+                          className="flex gap-2.5 rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 transition-[background-color,border-color] duration-150 hover:border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] hover:bg-[var(--accent-bg)]"
                         >
-                          <p className="text-sm font-semibold leading-snug text-dc-text">
-                            {productName}
-                          </p>
-                          <p className="mt-1 text-xs tabular-nums text-dc-text-secondary">
-                            {lot.lotCode}
-                          </p>
-                          {timerLine ? (
-                            <p
-                              className={`mt-2 text-xl font-bold tabular-nums tracking-tight ${timerClass}`}
-                            >
-                              {timerLine}
+                          <ProductThumbnail
+                            imageUrl={productImages[lot.productId]}
+                            alt={productName}
+                            size="sm"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold leading-snug text-[var(--ink)]">
+                              {productName}
                             </p>
-                          ) : (
-                            <p className="mt-2 text-xs font-medium text-dc-text-muted">
-                              Aguardando início
+                            <p className="mt-1 font-mono text-xs tabular-nums text-[var(--ink-2)]">
+                              {lot.lotCode}
                             </p>
-                          )}
+                            {timerLine ? (
+                              <p
+                                className={`mt-2 font-mono text-xl font-bold tabular-nums tracking-tight ${timerClass}`}
+                              >
+                                {timerLine}
+                              </p>
+                            ) : (
+                              <p className="mt-2 text-xs font-medium text-[var(--muted)]">
+                                Aguardando início
+                              </p>
+                            )}
+                          </div>
                         </Link>
                       </li>
                     );

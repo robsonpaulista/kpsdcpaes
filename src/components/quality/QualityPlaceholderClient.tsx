@@ -1,10 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import {
-  CockpitEmpty,
-  CockpitPageHeader,
-} from "@/components/shared/CockpitUi";
+import { CockpitPageHeader } from "@/components/shared/CockpitUi";
+import { Button, EmptyState } from "@/components/ui";
 
 type Props = {
   title: string;
@@ -20,25 +17,20 @@ export function QualityPlaceholderClient({ title, description }: Props) {
         title={title}
         description={description}
         actions={
-          <Link href="/app/quality" className="dc-btn-secondary h-10 px-3 text-sm">
+          <Button href="/app/quality" variant="secondary" size="sm">
             ← Visão geral
-          </Link>
+          </Button>
         }
       />
-      <CockpitEmpty
+      <EmptyState
         title="Disponível após validação da fábrica"
         detail="Enquanto isso, use perdas e ocorrências para registrar o que acontece no chão. Não inventamos critérios oficiais de retrabalho/reprovação."
         action={
           <div className="flex flex-wrap justify-center gap-2">
-            <Link href="/app/quality/losses" className="dc-btn-primary">
-              Fila de perdas →
-            </Link>
-            <Link
-              href="/app/quality/incidents"
-              className="dc-btn-secondary"
-            >
+            <Button href="/app/quality/losses">Fila de perdas →</Button>
+            <Button href="/app/quality/incidents" variant="secondary">
               Ocorrências →
-            </Link>
+            </Button>
           </div>
         }
       />

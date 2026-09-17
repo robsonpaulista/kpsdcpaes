@@ -3,7 +3,7 @@ import type {
   FetchOrdersParams,
   ProductionOrderSource,
 } from "@/integrations/production-orders/types/external-production-order";
-import { MOCK_EXTERNAL_ORDERS } from "@/integrations/production-orders/fixtures/mock-orders";
+import { getMockExternalOrders } from "@/integrations/production-orders/fixtures/mock-orders";
 
 /**
  * Fonte temporária de OPs enquanto o ERP não está disponível.
@@ -11,7 +11,7 @@ import { MOCK_EXTERNAL_ORDERS } from "@/integrations/production-orders/fixtures/
  */
 export class MockProductionOrderSource implements ProductionOrderSource {
   async fetchOrders(params?: FetchOrdersParams): Promise<ExternalProductionOrder[]> {
-    let orders = [...MOCK_EXTERNAL_ORDERS];
+    let orders = getMockExternalOrders();
 
     if (params?.productionDate) {
       orders = orders.filter((o) => o.productionDate === params.productionDate);
@@ -30,7 +30,7 @@ export class MockProductionOrderSource implements ProductionOrderSource {
   }
 
   async fetchOrder(externalId: string): Promise<ExternalProductionOrder> {
-    const order = MOCK_EXTERNAL_ORDERS.find((o) => o.externalId === externalId);
+    const order = getMockExternalOrders().find((o) => o.externalId === externalId);
     if (!order) {
       throw new Error(`OP mock não encontrada: ${externalId}`);
     }

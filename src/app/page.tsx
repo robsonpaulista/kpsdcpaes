@@ -22,7 +22,7 @@ export default function HomePage() {
         <BrandMark href="/" tone="dark" size="lg" />
 
         <h1 className="mt-12 max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl">
-          DC Pães
+          KPS DC Pães
           <span className="mt-2 block text-2xl font-medium tracking-tight text-white/50 sm:text-3xl lg:text-4xl">
             Sistema operacional da fábrica
           </span>

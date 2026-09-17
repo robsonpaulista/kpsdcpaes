@@ -9,8 +9,7 @@ type BrandMarkProps = {
 };
 
 /**
- * Marca DC Pães — Doc 03 §1 / §6.
- * Identidade clara sem pintar a UI de laranja.
+ * Marca KPS DC Pães — alinhada ao site dcpaes.com.br.
  */
 export function BrandMark({
   href = "/app/cockpit",
@@ -26,24 +25,30 @@ export function BrandMark({
         : "h-9 w-9 text-xs";
   const title =
     size === "lg" ? "text-xl" : size === "sm" ? "text-sm" : "text-base";
-  const muted = tone === "dark" ? "text-white/45" : "text-dc-text-muted";
   const strong = tone === "dark" ? "text-white" : "text-dc-text";
 
   const content = (
     <span className="inline-flex items-center gap-3">
       <span
-        className={`relative inline-flex shrink-0 items-center justify-center rounded-[10px] bg-dc-graphite font-bold tracking-tight text-white ${monogram}`}
+        className={`relative inline-flex shrink-0 items-center justify-center rounded-[10px] font-bold tracking-tight ${monogram} ${
+          tone === "dark"
+            ? "border border-white bg-[#563f30] text-white"
+            : "bg-[var(--brand)] text-white"
+        }`}
       >
         DC
-        <span className="absolute inset-x-1.5 bottom-1 h-0.5 rounded-full bg-dc-orange" />
+        <span
+          className={`absolute inset-x-1.5 bottom-1 h-0.5 rounded-full ${
+            tone === "dark" ? "bg-white" : "bg-[var(--brand-accent)]"
+          }`}
+        />
       </span>
       {showWordmark ? (
         <span className="min-w-0 text-left leading-tight">
-          <span className={`block font-semibold tracking-tight ${title} ${strong}`}>
-            DC Pães
-          </span>
-          <span className={`mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.16em] ${muted}`}>
-            Factory OS
+          <span
+            className={`block font-semibold tracking-tight ${title} ${strong}`}
+          >
+            KPS DC Pães
           </span>
         </span>
       ) : null}

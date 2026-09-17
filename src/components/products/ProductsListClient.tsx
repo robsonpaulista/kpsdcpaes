@@ -1,12 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CockpitPageHeader } from "@/components/shared/CockpitUi";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
 import {
-  CockpitEmpty,
-  CockpitPageHeader,
-} from "@/components/shared/CockpitUi";
+  Alert,
+  Button,
+  EmptyState,
+  ListRow,
+  StatTile,
+  StatusBadge,
+} from "@/components/ui";
 import { useFactoryLiveReload } from "@/hooks/useFactoryLiveReload";
 import { useFactoryRole } from "@/hooks/useFactoryRole";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
@@ -59,7 +64,9 @@ export function ProductsListClient() {
     setError(null);
     try {
       const seeded = await seedMockFactoryProducts(getFirestoreDb());
-      setMessage(`${seeded.length} produto(s) do mock garantidos no catálogo.`);
+      setMessage(
+        `${seeded.length} produto(s) DC Pães garantidos no catálogo (com imagem).`,
+      );
       await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao semear");
@@ -68,112 +75,89 @@ export function ProductsListClient() {
     }
   }
 
+  const visible = items.filter((p) => p.active);
+
   return (
     <div className="space-y-6">
       <CockpitPageHeader
         eyebrow="Catálogo"
         title="Produtos"
-        description="Catálogo industrial do Factory OS (Doc 02). Ficha técnica oficial entra quando a operação validar — sem inventar receita aqui."
+        description="Catálogo industrial DC Pães com fotos reais. Ficha técnica oficial entra quando a operação validar."
         actions={
           canSeed ? (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               disabled={busy}
               onClick={() => void handleSeed()}
-              className="dc-btn-secondary h-10 disabled:opacity-50"
             >
-              {busy ? "…" : "Semear produtos mock"}
-            </button>
+              {busy ? "…" : "Semear catálogo DC Pães"}
+            </Button>
           ) : null
         }
       />
 
-      {!loading && items.length > 0 ? (
+      {!loading && visible.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="dc-panel px-4 py-4">
-            <p className="dc-eyebrow">Total</p>
-            <p className="dc-metric mt-2 text-dc-text">{counts.total}</p>
-          </div>
-          <div className="dc-panel px-4 py-4">
-            <p className="dc-eyebrow">Ativos</p>
-            <p className="dc-metric mt-2 text-success">{counts.active}</p>
-          </div>
-          <div className="dc-panel px-4 py-4">
-            <p className="dc-eyebrow">Com código ERP</p>
-            <p className="dc-metric mt-2 text-dc-orange">{counts.mapped}</p>
-          </div>
+          <StatTile label="Total" value={counts.total} />
+          <StatTile label="Ativos" value={counts.active} />
+          <StatTile label="Com código ERP" value={counts.mapped} />
         </div>
       ) : null}
 
-      {message ? (
-        <p className="rounded-[12px] border border-success/25 bg-success-soft px-4 py-2.5 text-sm text-success">
-          {message}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="rounded-[12px] border border-danger/25 bg-danger-soft px-4 py-2.5 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
+      {message ? <Alert tone="good">{message}</Alert> : null}
+      {error ? <Alert tone="critical">{error}</Alert> : null}
 
       {loading ? (
-        <p className="text-sm text-dc-text-secondary">Carregando…</p>
-      ) : items.length === 0 ? (
-        <CockpitEmpty
+        <p className="text-sm text-[var(--ink-2)]">Carregando…</p>
+      ) : visible.length === 0 ? (
+        <EmptyState
           title="Nenhum produto"
-          detail="Sincronize OPs / mapeie produtos no PCP ou semee o catálogo mock."
+          detail="Semeie o catálogo DC Pães ou mapeie produtos no PCP."
           action={
             canSeed ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void handleSeed()}
-                className="dc-btn-primary"
-              >
-                Semear produtos mock
-              </button>
+              <Button disabled={busy} onClick={() => void handleSeed()}>
+                Semear catálogo DC Pães
+              </Button>
             ) : (
-              <Link href="/app/pcp" className="dc-btn-primary">
-                Ir ao PCP →
-              </Link>
+              <Button href="/app/pcp">Ir ao PCP →</Button>
             )
           }
         />
       ) : (
-        <ul className="dc-panel divide-y divide-dc-border/70 overflow-hidden">
-          {items.map((product) => (
+        <ul className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+          {visible.map((product) => (
             <li key={product.id}>
-              <Link
+              <ListRow
                 href={`/app/products/${encodeURIComponent(product.id)}`}
-                className="group flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 transition hover:bg-dc-surface-secondary"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold tracking-tight text-dc-text">
-                    {product.name}
-                  </p>
-                  <p className="mt-0.5 text-xs tabular-nums text-dc-text-muted">
-                    {product.code}
+                leading={
+                  <ProductThumbnail
+                    imageUrl={product.imageUrl}
+                    alt={product.name}
+                    size="sm"
+                  />
+                }
+                title={product.name}
+                meta={
+                  <>
+                    <span className="font-mono tabular-nums">{product.code}</span>
                     {product.externalProductCode
                       ? ` · ERP ${product.externalProductCode}`
                       : ""}
                     {product.nominalWeight != null
                       ? ` · ${product.nominalWeight} ${product.unit ?? "g"}`
                       : ""}
-                  </p>
-                </div>
-                <span className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                      product.active
-                        ? "border-success/30 bg-success-soft text-success"
-                        : "border-dc-border bg-dc-surface-secondary text-dc-text-muted"
-                    }`}
-                  >
-                    {product.active ? "Ativo" : "Inativo"}
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-dc-text-muted transition group-hover:translate-x-0.5 group-hover:text-dc-orange" />
-                </span>
-              </Link>
+                  </>
+                }
+                trailing={
+                  <>
+                    <StatusBadge status={product.active ? "good" : "neutral"}>
+                      {product.active ? "Ativo" : "Inativo"}
+                    </StatusBadge>
+                    <ChevronRight className="size-4 text-[var(--muted)]" />
+                  </>
+                }
+              />
             </li>
           ))}
         </ul>

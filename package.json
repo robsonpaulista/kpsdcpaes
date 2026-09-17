@@ -9,7 +9,8 @@
     "lint": "next lint",
     "deploy:firestore": "node scripts/deploy-firestore.mjs",
     "rules:factory-block": "node scripts/print-factory-rules-block.mjs",
-    "ensure:admin": "node --env-file=.env.local scripts/ensure-temp-admin.mjs"
+    "ensure:admin": "node --env-file=.env.local scripts/ensure-temp-admin.mjs",
+    "test": "node --import tsx --test src/lib/severity/getSeverity.test.ts src/domain/cockpit/build-decisions.test.ts"
   },
   "dependencies": {
     "firebase": "^11.10.0",
@@ -28,6 +29,7 @@
     "eslint": "^9.31.0",
     "eslint-config-next": "^15.4.5",
     "tailwindcss": "^4.1.11",
+    "tsx": "^4.23.13",
     "typescript": "^5.8.3"
   }
 }

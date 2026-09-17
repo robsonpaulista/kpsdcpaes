@@ -1,23 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "@/styles/tokens.css";
 
-const inter = Inter({
+const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  variable: "--font-inter",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-sans",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-mono",
   display: "swap",
 });
 
 export const metadata: Metadata = {
   title: {
-    default: "DC Pães · Factory OS",
-    template: "%s · DC Pães",
+    default: "KPS DC Pães",
+    template: "%s · KPS DC Pães",
   },
   description: "Sistema operacional da fábrica DC Pães",
-  applicationName: "DC Factory OS",
+  applicationName: "KPS DC Pães",
   appleWebApp: {
     capable: true,
-    title: "DC Floor",
+    title: "KPS DC Pães",
     statusBarStyle: "default",
   },
   formatDetection: {
@@ -31,8 +39,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#e85d04" },
-    { media: "(prefers-color-scheme: dark)", color: "#e85d04" },
+    { media: "(prefers-color-scheme: light)", color: "#563f30" },
+    { media: "(prefers-color-scheme: dark)", color: "#563f30" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -47,7 +55,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body
+        className={`${plexSans.variable} ${plexMono.variable} font-sans antialiased`}
+      >
+        {children}
+      </body>
     </html>
   );
 }

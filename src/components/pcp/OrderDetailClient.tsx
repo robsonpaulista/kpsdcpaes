@@ -13,6 +13,7 @@ import {
   productionStatusLabel,
   stepStatusLabel,
 } from "@/lib/labels/production-status";
+import { formatDateBr } from "@/lib/format/date";
 import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
 import { useFactoryLiveReload } from "@/hooks/useFactoryLiveReload";
 import { getProductionOrder } from "@/repositories/orders.repository";
@@ -111,7 +112,9 @@ export function OrderDetailClient({
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dc-text-muted">
             Data
           </p>
-          <p className="dc-metric mt-2 tabular-nums">{order.productionDate}</p>
+          <p className="dc-metric mt-2 tabular-nums">
+            {formatDateBr(order.productionDate)}
+          </p>
           <p className="mt-2 text-xs text-dc-text-muted">ORIGEM: GESTOR</p>
         </div>
         <div className="dc-panel p-4">

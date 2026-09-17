@@ -13,6 +13,8 @@ import {
   isCoolingMinimumReached,
 } from "@/services/workflow.service";
 import { listProducts } from "@/repositories/products.repository";
+import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
+import { buildProductMaps } from "@/lib/products/product-maps";
 import type { LotStepRun, ProductionLot, TimingStatus } from "@/types/production";
 
 export type CoolingQueueItem = {
@@ -111,6 +113,7 @@ export function FloorCoolingBoard({
   onRefresh: () => void;
 }) {
   const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [productImages, setProductImages] = useState<Record<string, string | null>>({});
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -125,9 +128,9 @@ export function FloorCoolingBoard({
         if (!isFirebaseConfigured()) return;
         const products = await listProducts(getFirestoreDb());
         if (cancelled) return;
-        const names: Record<string, string> = {};
-        for (const p of products) names[p.id] = p.name;
-        setProductNames(names);
+        const maps = buildProductMaps(products);
+        setProductNames(maps.names);
+        setProductImages(maps.images);
       } catch {
         /* ignore */
       }
@@ -198,11 +201,20 @@ export function FloorCoolingBoard({
                         onClick={() => onSelectLot(item.lot.lotCode)}
                         className={`floor-zone-card ${zoneCardClass(zoneId)}`}
                       >
-                        <span className="text-[11px] font-bold uppercase tracking-wide text-dc-text-muted">
-                          {stationLabel}
-                        </span>
-                        <span className="mt-1.5 text-base font-medium leading-snug text-dc-text">
-                          {productName}
+                        <span className="flex items-start gap-3">
+                          <ProductThumbnail
+                            imageUrl={productImages[item.lot.productId]}
+                            alt={productName}
+                            size="sm"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[11px] font-bold uppercase tracking-wide text-dc-text-muted">
+                              {stationLabel}
+                            </span>
+                            <span className="mt-1.5 block text-base font-medium leading-snug text-dc-text">
+                              {productName}
+                            </span>
+                          </span>
                         </span>
                         <span className="mt-2 flex items-baseline justify-between gap-2">
                           <span className="text-sm font-semibold tabular-nums text-dc-text">

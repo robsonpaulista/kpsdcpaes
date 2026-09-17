@@ -4,10 +4,17 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AccessDeniedNote } from "@/components/access/AccessDeniedNote";
+import { CockpitPageHeader } from "@/components/shared/CockpitUi";
 import {
-  CockpitEmpty,
-  CockpitPageHeader,
-} from "@/components/shared/CockpitUi";
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  StatTile,
+  StatusBadge,
+  Textarea,
+} from "@/components/ui";
 import { stepTypeLabel } from "@/domain/production/process-route";
 import { useFactoryRole } from "@/hooks/useFactoryRole";
 import { useQualityBoard } from "@/hooks/useQualityBoard";
@@ -119,18 +126,12 @@ export function QualityIncidentsClient() {
         description="Registro do setor de qualidade. Bloqueio de lote é ação explícita."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/app/quality/losses"
-              className="dc-btn-secondary h-10 px-3 text-sm"
-            >
+            <Button href="/app/quality/losses" variant="secondary" size="sm">
               ← Fila de perdas
-            </Link>
-            <Link
-              href="/app/settings/qa"
-              className="dc-btn-secondary h-10 px-3 text-sm"
-            >
+            </Button>
+            <Button href="/app/settings/qa" variant="secondary" size="sm">
               QA →
-            </Link>
+            </Button>
           </div>
         }
       />
@@ -140,37 +141,31 @@ export function QualityIncidentsClient() {
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="dc-panel px-4 py-4">
-          <p className="dc-eyebrow">Abertas</p>
-          <p className="dc-metric mt-2 text-warning">
-            {loading ? "…" : openCount}
-          </p>
-        </div>
-        <div className="dc-panel px-4 py-4">
-          <p className="dc-eyebrow">Total</p>
-          <p className="dc-metric mt-2 text-dc-text">
-            {loading ? "…" : incidents.length}
-          </p>
-        </div>
+        <StatTile
+          label="Abertas"
+          value={loading ? "…" : openCount}
+          tone={!loading && openCount > 0 ? "warning" : "ink"}
+        />
+        <StatTile label="Total" value={loading ? "…" : incidents.length} />
       </div>
 
       {canManage ? (
         <form
           ref={formRef}
-          className="dc-panel space-y-3 px-5 py-5"
+          className="space-y-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-5 py-5"
           onSubmit={(e) => {
             e.preventDefault();
             void handleCreate();
           }}
         >
           <p className="dc-eyebrow">Novo registro</p>
-          <h2 className="text-sm font-semibold tracking-tight text-dc-text">
+          <h2 className="text-sm font-semibold tracking-tight text-[var(--ink)]">
             Registrar ocorrência
           </h2>
           {relatedStepRunId ? (
-            <p className="rounded-[12px] border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-dc-text">
+            <Alert tone="warning">
               Vinculada à perda de{" "}
-              <strong className="tabular-nums">
+              <strong className="font-mono tabular-nums">
                 {relatedLossQty?.toLocaleString("pt-BR")} un.
               </strong>
               {relatedStepType
@@ -184,154 +179,148 @@ export function QualityIncidentsClient() {
               >
                 Remover vínculo
               </button>
-            </p>
+            </Alert>
           ) : null}
-          <label className="block text-xs text-dc-text-muted">
+          <label className="block text-xs text-[var(--muted)]">
             Lote (código)
-            <input
+            <Input
               value={lotRef}
               onChange={(e) => setLotRef(e.target.value.toUpperCase())}
               placeholder="Ex.: PF26082701"
-              className="mt-1 h-11 w-full rounded-[12px] border border-dc-border bg-dc-bg px-3 text-sm tabular-nums outline-none focus:border-dc-orange"
+              className="mt-1 font-mono tabular-nums"
             />
           </label>
-          <label className="block text-xs text-dc-text-muted">
+          <label className="block text-xs text-[var(--muted)]">
             Descrição
-            <textarea
+            <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               placeholder="Descreva o problema observado…"
-              className="mt-1 w-full rounded-[12px] border border-dc-border bg-dc-bg px-3 py-2 text-sm outline-none focus:border-dc-orange"
+              className="mt-1"
             />
           </label>
-          <label className="flex items-center gap-2 text-sm text-dc-text">
+          <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
             <input
               type="checkbox"
               checked={blockLot}
               onChange={(e) => setBlockLot(e.target.checked)}
-              className="h-4 w-4 accent-dc-orange"
+              className="h-4 w-4 accent-[var(--accent)]"
             />
             Bloquear lote agora (ação explícita)
           </label>
-          <button
+          <Button
             type="submit"
             disabled={busy || !lotRef.trim() || !description.trim()}
-            className="dc-btn-primary disabled:opacity-40"
           >
             {busy ? "…" : "REGISTRAR"}
-          </button>
-          {formMessage ? (
-            <p className="rounded-[12px] border border-success/25 bg-success-soft px-3 py-2 text-sm text-success">
-              {formMessage}
-            </p>
-          ) : null}
+          </Button>
+          {formMessage ? <Alert tone="good">{formMessage}</Alert> : null}
         </form>
       ) : null}
 
-      {error ? (
-        <p className="rounded-[12px] border border-danger/25 bg-danger-soft px-4 py-2.5 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
+      {error ? <Alert tone="critical">{error}</Alert> : null}
 
       <section className="space-y-3">
         <p className="dc-eyebrow">Lista</p>
         {loading ? (
-          <p className="text-sm text-dc-text-secondary">Carregando…</p>
+          <p className="text-sm text-[var(--ink-2)]">Carregando…</p>
         ) : incidents.length === 0 ? (
-          <CockpitEmpty
+          <EmptyState
             title="Nenhuma ocorrência ainda"
             detail="Registre a partir da fila de perdas ou crie manualmente acima."
             action={
-              <Link href="/app/quality/losses" className="dc-btn-primary">
-                Ver fila de perdas →
-              </Link>
+              <Button href="/app/quality/losses">Ver fila de perdas →</Button>
             }
           />
         ) : (
           <ul className="space-y-3">
             {incidents.map((incident) => (
-              <li key={incident.id} className="dc-panel px-5 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <Link
-                      href={`/app/cockpit/production/lots/${incident.lotId}`}
-                      className="text-sm font-semibold tabular-nums text-dc-orange"
-                    >
-                      {incident.lotCode}
-                    </Link>
-                    <p className="mt-0.5 text-xs text-dc-text-secondary">
-                      {productNames[incident.productId] ?? incident.productId}
-                      {incident.stepType
-                        ? ` · ${stepTypeLabel(incident.stepType as StepType)}`
-                        : ""}
-                      {incident.lossQuantity != null
-                        ? ` · perda ${incident.lossQuantity.toLocaleString("pt-BR")} un.`
-                        : ""}
-                    </p>
-                  </div>
-                  <span
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                      incident.status === "OPEN"
-                        ? "border-warning/30 bg-warning-soft text-warning"
-                        : "border-success/30 bg-success-soft text-success"
-                    }`}
-                  >
-                    {incident.status === "OPEN" ? "Aberta" : "Resolvida"}
-                    {incident.blocksLot ? " · Bloqueio" : ""}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-dc-text">{incident.description}</p>
-                <p className="mt-1 text-[11px] text-dc-text-muted">
-                  {new Date(incident.createdAt).toLocaleString("pt-BR")}
-                </p>
-
-                {incident.status === "OPEN" && canManage ? (
-                  <div className="mt-3 flex flex-wrap gap-2 border-t border-dc-border/60 pt-3">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void resolveIncident(incident.id)}
-                      className="dc-btn-secondary h-9 px-3 text-xs"
-                    >
-                      Marcar resolvida
-                    </button>
-                  </div>
-                ) : null}
-
-                {incident.blocksLot &&
-                incident.status === "OPEN" &&
-                canManage ? (
-                  <div className="mt-3 space-y-2 border-t border-dc-border/60 pt-3">
-                    <label className="block text-xs text-dc-text-muted">
-                      Motivo da liberação do lote
-                      <input
-                        value={releaseNotes[incident.lotId] ?? ""}
-                        onChange={(e) =>
-                          setReleaseNotes((prev) => ({
-                            ...prev,
-                            [incident.lotId]: e.target.value,
-                          }))
-                        }
-                        className="mt-1 h-10 w-full rounded-[12px] border border-dc-border bg-dc-bg px-3 text-sm outline-none focus:border-dc-orange"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        void releaseLot(
-                          incident.lotId,
-                          releaseNotes[incident.lotId] ?? "",
-                        )
+              <li key={incident.id}>
+                <Card className="px-5 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <Link
+                        href={`/app/cockpit/production/lots/${incident.lotId}`}
+                        className="font-mono text-sm font-semibold tabular-nums text-[var(--ink)] hover:text-[var(--accent-strong)]"
+                      >
+                        {incident.lotCode}
+                      </Link>
+                      <p className="mt-0.5 text-xs text-[var(--ink-2)]">
+                        {productNames[incident.productId] ?? incident.productId}
+                        {incident.stepType
+                          ? ` · ${stepTypeLabel(incident.stepType as StepType)}`
+                          : ""}
+                        {incident.lossQuantity != null
+                          ? ` · perda ${incident.lossQuantity.toLocaleString("pt-BR")} un.`
+                          : ""}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      status={
+                        incident.status === "OPEN"
+                          ? incident.blocksLot
+                            ? "critical"
+                            : "warning"
+                          : "good"
                       }
-                      className="dc-btn-primary h-9 px-3 text-xs"
                     >
-                      Liberar lote
-                    </button>
+                      {incident.status === "OPEN" ? "Aberta" : "Resolvida"}
+                      {incident.blocksLot ? " · Bloqueio" : ""}
+                    </StatusBadge>
                   </div>
-                ) : null}
+                  <p className="mt-2 text-sm text-[var(--ink)]">
+                    {incident.description}
+                  </p>
+                  <p className="mt-1 text-[11px] text-[var(--muted)]">
+                    {new Date(incident.createdAt).toLocaleString("pt-BR")}
+                  </p>
+
+                  {incident.status === "OPEN" && canManage ? (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void resolveIncident(incident.id)}
+                      >
+                        Marcar resolvida
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {incident.blocksLot &&
+                  incident.status === "OPEN" &&
+                  canManage ? (
+                    <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
+                      <label className="block text-xs text-[var(--muted)]">
+                        Motivo da liberação do lote
+                        <Input
+                          value={releaseNotes[incident.lotId] ?? ""}
+                          onChange={(e) =>
+                            setReleaseNotes((prev) => ({
+                              ...prev,
+                              [incident.lotId]: e.target.value,
+                            }))
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                      <Button
+                        size="sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void releaseLot(
+                            incident.lotId,
+                            releaseNotes[incident.lotId] ?? "",
+                          )
+                        }
+                      >
+                        Liberar lote
+                      </Button>
+                    </div>
+                  ) : null}
+                </Card>
               </li>
             ))}
           </ul>

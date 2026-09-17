@@ -142,19 +142,19 @@ export function ReportsClient() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className="group dc-panel flex h-full items-start gap-3 px-4 py-4 transition hover:border-dc-orange/35 hover:shadow-dc-md"
+                      className="group flex h-full items-start gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 py-4 transition-[background-color,border-color] duration-150 hover:border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] hover:bg-[var(--surface-2)]"
                     >
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-dc-surface-secondary text-dc-text transition group-hover:bg-dc-orange/10 group-hover:text-dc-orange">
-                        <Icon className="h-5 w-5" strokeWidth={2} />
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--surface-2)] text-[var(--ink-2)] transition-colors duration-150 group-hover:bg-[var(--accent-bg)] group-hover:text-[var(--accent-strong)]">
+                        <Icon className="h-5 w-5" strokeWidth={1.75} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold tracking-tight text-dc-text">
+                          <span className="text-sm font-semibold tracking-tight text-[var(--ink)]">
                             {item.title}
                           </span>
-                          <ChevronRight className="h-4 w-4 shrink-0 text-dc-text-muted transition group-hover:translate-x-0.5 group-hover:text-dc-orange" />
+                          <ChevronRight className="h-4 w-4 shrink-0 text-[var(--muted)] transition-colors duration-150 group-hover:text-[var(--accent)]" />
                         </span>
-                        <span className="mt-1 block text-xs leading-relaxed text-dc-text-secondary">
+                        <span className="mt-1 block text-xs leading-relaxed text-[var(--ink-2)]">
                           {item.description}
                         </span>
                       </span>
