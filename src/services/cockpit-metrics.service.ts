@@ -568,10 +568,12 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
 
   attention.sort((a, b) => b.priority - a.priority);
 
-  const totalLossUnits = lossSteps.reduce(
-    (sum, s) => sum + (s.lossQuantity ?? 0),
-    0,
-  );
+  const totalLossUnits = lossSteps
+    .filter(
+      (s) =>
+        localDateFromIso(s.finishedAt ?? s.updatedAt) === todayDate,
+    )
+    .reduce((sum, s) => sum + (s.lossQuantity ?? 0), 0);
 
   const runningLots = activeLots.filter(
     (l) => l.currentStepStatus === "IN_PROGRESS",

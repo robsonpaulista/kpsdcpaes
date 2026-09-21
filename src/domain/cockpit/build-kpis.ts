@@ -120,8 +120,8 @@ export function buildDashboardKpis(input: KpiBuildInput): DashboardKpi[] {
       metaLabel:
         input.plannedUnitsToday <= 0
           ? "Plano de produção ainda não cadastrado."
-          : `Meta do dia: ${formatPercent(adhMeta)}`,
-      metaRaw: input.plannedUnitsToday <= 0 ? null : adhMeta,
+          : `${formatUnits(input.realizedUnitsToday)} de ${formatUnits(input.plannedUnitsToday)} programadas · meta ${formatPercent(adhMeta)}`,
+      metaRaw: input.plannedUnitsToday <= 0 ? null : input.plannedUnitsToday,
       severity: adhSeverity,
       deltaLabel: input.plannedUnitsToday <= 0 ? "não calculada" : "plano",
       deltaTone: "neutral",

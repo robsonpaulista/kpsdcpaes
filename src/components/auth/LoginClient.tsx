@@ -100,15 +100,6 @@ export function LoginClient() {
     <main className="relative flex min-h-screen overflow-hidden bg-dc-black text-dc-white">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.35]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
-          backgroundSize: "56px 56px",
-        }}
-      />
-      <div
-        aria-hidden
         className="pointer-events-none absolute -right-24 top-1/4 h-[420px] w-[420px] rounded-full bg-dc-orange/20 blur-3xl"
       />
 

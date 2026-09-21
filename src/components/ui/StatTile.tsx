@@ -4,6 +4,8 @@ import type { StatusTone } from "@/components/ui/StatusBadge";
 type StatTileProps = {
   label: string;
   value: string | number;
+  /** Linha auxiliar sob o valor (ex.: base do cálculo). */
+  detail?: string;
   /** Só colorir o valor quando o número em si for um problema/alerta. */
   tone?: StatusTone | "ink";
   className?: string;
@@ -24,6 +26,7 @@ const valueTone: Record<NonNullable<StatTileProps["tone"]>, string> = {
 export function StatTile({
   label,
   value,
+  detail,
   tone = "ink",
   className,
 }: StatTileProps) {
@@ -45,6 +48,9 @@ export function StatTile({
       >
         {value}
       </p>
+      {detail ? (
+        <p className="mt-2 text-xs leading-snug text-[var(--ink-2)]">{detail}</p>
+      ) : null}
     </div>
   );
 }

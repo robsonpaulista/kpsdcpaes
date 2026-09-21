@@ -17,6 +17,7 @@ const PAGE_TITLES: ReadonlyArray<{ match: (path: string) => boolean; title: stri
   { match: (p) => p.startsWith("/app/cockpit/production/history"), title: "Histórico" },
   { match: (p) => p.startsWith("/app/cockpit/production/lots"), title: "Lotes" },
   { match: (p) => p.startsWith("/app/cockpit/production/orders"), title: "Ordens de produção" },
+  { match: (p) => p.startsWith("/app/cockpit/production/overview"), title: "Visão Geral · Produção" },
   { match: (p) => p.startsWith("/app/cockpit/production"), title: "Produção ao vivo" },
   { match: (p) => p === "/app/cockpit" || p === "/app/cockpit/", title: "Visão Geral" },
   {
@@ -62,6 +63,11 @@ const PAGE_TITLES: ReadonlyArray<{ match: (path: string) => boolean; title: stri
 export function resolveCockpitPageTitle(pathname: string): string {
   const hit = PAGE_TITLES.find((entry) => entry.match(pathname));
   return hit?.title ?? "Cockpit";
+}
+
+/** Título da topbar: sistema + página. */
+export function formatCockpitTopbarTitle(pageTitle: string): string {
+  return `KPS DC Pães - ${pageTitle}`;
 }
 
 export function cockpitTopbarSubtitle(): string {

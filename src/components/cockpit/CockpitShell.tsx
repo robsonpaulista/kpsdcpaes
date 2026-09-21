@@ -24,6 +24,7 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { ConnectionBadge } from "@/components/shared/ConnectionBadge";
 import {
   resolveCockpitPageTitle,
+  formatCockpitTopbarTitle,
 } from "@/domain/cockpit/page-title";
 import { formatLiveStamp } from "@/domain/cockpit/format-dashboard";
 import { FactoryRoleProvider, useFactoryRole } from "@/hooks/useFactoryRole";
@@ -207,8 +208,9 @@ function CockpitShellInner({ children }: { children: React.ReactNode }) {
   const expanded = ready ? !collapsed : true;
   const initials = userInitials(user?.email);
   const pageTitleOverride = useCockpitPageTitleState().pageTitle;
-  const pageTitle =
-    pageTitleOverride ?? resolveCockpitPageTitle(pathname);
+  const pageTitle = formatCockpitTopbarTitle(
+    pageTitleOverride ?? resolveCockpitPageTitle(pathname),
+  );
 
   function renderNav(items: ReadonlyArray<NavItem>) {
     return items.map((item) => {
