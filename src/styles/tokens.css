@@ -108,57 +108,14 @@
 }
 
 /*
- * Não seguir prefers-color-scheme do SO.
- * O app usa tema claro da marca; login/display usam --dc-black absoluto.
+ * Paleta ÚNICA da marca — igual em desktop, tablet, celular e qualquer SO.
+ * Não existe modo que siga prefers-color-scheme.
  */
-[data-theme="dark"] {
-  --bg: #1c1612;
-  --surface: #262019;
-  --surface-2: #302820;
-  --border: #4a3c32;
-  --ink: #f7f2ec;
-  --ink-2: #c9b8a8;
-  --muted: #9a8776;
-  --accent: #c4a484;
-  --accent-strong: #d4b896;
-  --accent-bg: #3f2e23;
-  --good: #5a9a72;
-  --good-bg: #1a2e22;
-  --warning: #e0a438;
-  --warning-bg: #3a2c10;
-  --critical: #e5675e;
-  --critical-bg: #3d1e1b;
-
-  --dc-graphite: #563f30;
-  --dc-black: #0e0c09;
-  --dc-white: #ffffff;
-}
-
-[data-theme="light"] {
-  --bg: #f7f5f2;
-  --surface: #ffffff;
-  --surface-2: #f0ece7;
-  --border: #e2dbd4;
-  --ink: #1a1714;
-  --ink-2: #5a534c;
-  --muted: #8a8279;
-  --accent: #563f30;
-  --accent-strong: #3f2e23;
-  --accent-bg: #efe8e2;
-  --good: #2f6b45;
-  --good-bg: #e8f0eb;
-  --warning: #a8650a;
-  --warning-bg: #f7ecd9;
-  --critical: #b3261e;
-  --critical-bg: #f8e5e3;
-  --dc-black: #0e0c09;
-  --dc-white: #ffffff;
-}
 
 @theme inline {
-  --color-dc-black: var(--dc-black);
-  --color-dc-graphite: var(--dc-graphite);
-  --color-dc-white: var(--dc-white);
+  --color-dc-black: #0e0c09;
+  --color-dc-graphite: #563f30;
+  --color-dc-white: #ffffff;
   --color-dc-bg: var(--dc-bg);
   --color-dc-surface: var(--dc-surface);
   --color-dc-surface-secondary: var(--dc-surface-secondary);
@@ -199,21 +156,26 @@
   --radius-dc-lg: var(--radius-lg);
 }
 
+html {
+  color-scheme: only light;
+  forced-color-adjust: none;
+}
+
 html,
 body {
   background: var(--bg);
   color: var(--ink);
-  color-scheme: light;
   font-family: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
   font-feature-settings: "tnum" on;
   letter-spacing: -0.011em;
   text-rendering: optimizeLegibility;
 }
 
-/* Superfície escura fixa (login / landing) — independente do tema do SO */
+/* Superfície escura fixa (login / landing) — igual em todos os dispositivos */
 .dc-surface-dark {
-  background-color: #0e0c09;
-  color: #ffffff;
+  background-color: #0e0c09 !important;
+  color: #ffffff !important;
+  color-scheme: only dark;
 }
 
 .font-mono,
@@ -710,7 +672,9 @@ textarea:focus {
 .display-shell {
   min-height: 100vh;
   background: linear-gradient(180deg, #12100c 0%, #15130f 40%, #0e0c09 100%);
-  color: var(--dc-white);
+  color: #ffffff;
+  color-scheme: only dark;
+  forced-color-adjust: none;
 }
 
 .display-kpi {

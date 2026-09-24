@@ -38,10 +38,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#563f30" },
-    { media: "(prefers-color-scheme: dark)", color: "#563f30" },
-  ],
+  themeColor: "#563f30",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -54,7 +52,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" data-theme="light" style={{ colorScheme: "light" }}>
+    <html lang="pt-BR" data-theme="light" style={{ colorScheme: "only light" }}>
       <body
         className={`${plexSans.variable} ${plexMono.variable} font-sans antialiased`}
       >
