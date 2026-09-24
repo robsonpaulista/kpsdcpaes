@@ -34,7 +34,8 @@
   --warning-soft: var(--warning-bg);
 
   /* Aliases legados (componentes existentes) */
-  --dc-black: var(--ink);
+  /* Pretos/brancos ABSOLUTOS — nunca amarrar a --ink (quebra login no dark do SO). */
+  --dc-black: #0e0c09;
   --dc-graphite: var(--brand);
   --dc-white: #ffffff;
   --dc-bg: var(--bg);
@@ -106,30 +107,10 @@
   --radius-control: 10px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #1c1612;
-    --surface: #262019;
-    --surface-2: #302820;
-    --border: #4a3c32;
-    --ink: #f7f2ec;
-    --ink-2: #c9b8a8;
-    --muted: #9a8776;
-    --accent: #c4a484;
-    --accent-strong: #d4b896;
-    --accent-bg: #3f2e23;
-    --good: #5a9a72;
-    --good-bg: #1a2e22;
-    --warning: #e0a438;
-    --warning-bg: #3a2c10;
-    --critical: #e5675e;
-    --critical-bg: #3d1e1b;
-
-    --dc-graphite: #563f30;
-    --dc-white: #f7f2ec;
-  }
-}
-
+/*
+ * Não seguir prefers-color-scheme do SO.
+ * O app usa tema claro da marca; login/display usam --dc-black absoluto.
+ */
 [data-theme="dark"] {
   --bg: #1c1612;
   --surface: #262019;
@@ -149,7 +130,8 @@
   --critical-bg: #3d1e1b;
 
   --dc-graphite: #563f30;
-  --dc-white: #f7f2ec;
+  --dc-black: #0e0c09;
+  --dc-white: #ffffff;
 }
 
 [data-theme="light"] {
@@ -169,6 +151,8 @@
   --warning-bg: #f7ecd9;
   --critical: #b3261e;
   --critical-bg: #f8e5e3;
+  --dc-black: #0e0c09;
+  --dc-white: #ffffff;
 }
 
 @theme inline {
@@ -219,10 +203,17 @@ html,
 body {
   background: var(--bg);
   color: var(--ink);
+  color-scheme: light;
   font-family: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
   font-feature-settings: "tnum" on;
   letter-spacing: -0.011em;
   text-rendering: optimizeLegibility;
+}
+
+/* Superfície escura fixa (login / landing) — independente do tema do SO */
+.dc-surface-dark {
+  background-color: #0e0c09;
+  color: #ffffff;
 }
 
 .font-mono,

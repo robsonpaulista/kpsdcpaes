@@ -54,7 +54,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" data-theme="light" style={{ colorScheme: "light" }}>
       <body
         className={`${plexSans.variable} ${plexMono.variable} font-sans antialiased`}
       >

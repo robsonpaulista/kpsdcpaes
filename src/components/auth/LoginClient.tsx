@@ -97,7 +97,7 @@ export function LoginClient() {
   }
 
   return (
-    <main className="relative flex min-h-screen overflow-hidden bg-dc-black text-dc-white">
+    <main className="dc-surface-dark relative flex min-h-screen overflow-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute -right-24 top-1/4 h-[420px] w-[420px] rounded-full bg-dc-orange/20 blur-3xl"

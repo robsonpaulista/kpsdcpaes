@@ -3,7 +3,7 @@ import { BrandMark } from "@/components/shared/BrandMark";
 
 export default function HomePage() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-dc-black text-dc-white">
+    <main className="dc-surface-dark relative min-h-screen overflow-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-0 h-[480px] w-[720px] -translate-x-1/2 rounded-full bg-dc-orange/15 blur-3xl"
