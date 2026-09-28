@@ -13,6 +13,7 @@ export const COLLECTIONS = {
   qualityIncidents: "factory_quality_incidents",
   equipment: "factory_equipment",
   lossReasons: "factory_loss_reasons",
+  processSettings: "factory_process_settings",
   integrationRuns: "factory_integration_runs",
   integrationState: "factory_integration_state",
   users: "factory_users",

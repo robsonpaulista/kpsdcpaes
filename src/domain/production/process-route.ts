@@ -18,6 +18,24 @@ export function cloneDefaultProcessRoute(): ProcessRouteStep[] {
   return DEFAULT_PROCESS_ROUTE.map((step) => ({ ...step }));
 }
 
+/**
+ * Aplica tempos salvos (por etapa) sobre a rota padrão.
+ * Etapas sem configuração mantêm o tempo do DEFAULT_PROCESS_ROUTE.
+ */
+export function applyStepTimes(
+  overrides?: ProcessRouteStep[] | null,
+): ProcessRouteStep[] {
+  return cloneDefaultProcessRoute().map((step) => {
+    const saved = overrides?.find((o) => o.stepType === step.stepType);
+    if (!saved) return step;
+    return {
+      ...step,
+      standardDurationMinutes: Math.max(1, Math.round(saved.standardDurationMinutes)),
+      lateToleranceMinutes: Math.max(0, Math.round(saved.lateToleranceMinutes)),
+    };
+  });
+}
+
 /** Rota efetiva: snapshot/produto ou default. */
 export function resolveProcessRoute(
   route?: ProcessRouteStep[] | null,

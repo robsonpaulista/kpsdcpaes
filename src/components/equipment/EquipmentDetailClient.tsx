@@ -15,6 +15,7 @@ import { getFirestoreDb, isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   equipmentStatusLabel,
   equipmentTypeLabel,
+  formatEquipmentCapacity,
 } from "@/lib/labels/equipment";
 import { formatDateTimeBr } from "@/lib/format/date";
 import { listOpenStepRuns } from "@/repositories/execution.repository";
@@ -215,6 +216,37 @@ export function EquipmentDetailClient({ equipmentId }: { equipmentId: string }) 
       </section>
 
       <section className="dc-panel px-5 py-5">
+        <p className="dc-eyebrow">Capacidade e informações gerais</p>
+        <dl className="mt-3 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <InfoItem
+            label="Capacidade"
+            value={formatEquipmentCapacity(equipment)}
+          />
+          <InfoItem
+            label="Potência"
+            value={
+              equipment.powerKw != null
+                ? `${equipment.powerKw.toLocaleString("pt-BR")} kW`
+                : null
+            }
+          />
+          <InfoItem label="Fabricante" value={equipment.manufacturer} />
+          <InfoItem label="Modelo" value={equipment.model} />
+          <InfoItem label="Nº de série" value={equipment.serialNumber} />
+          <InfoItem
+            label="Instalação"
+            value={equipment.installedAt?.split("-").reverse().join("/")}
+          />
+          <InfoItem label="Localização" value={equipment.location} />
+        </dl>
+        {equipment.notes ? (
+          <p className="mt-3 whitespace-pre-line border-t border-dc-border/60 pt-3 text-sm text-dc-text-secondary">
+            {equipment.notes}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="dc-panel px-5 py-5">
         <p className="dc-eyebrow">Ações</p>
         {!canManage ? (
           <div className="mt-3">
@@ -269,6 +301,23 @@ export function EquipmentDetailClient({ equipmentId }: { equipmentId: string }) 
           Cadastro (settings) →
         </Link>
       </section>
+    </div>
+  );
+}
+
+function InfoItem({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-dc-text-muted">{label}</dt>
+      <dd className="mt-0.5 truncate font-medium text-dc-text">
+        {value || "—"}
+      </dd>
     </div>
   );
 }

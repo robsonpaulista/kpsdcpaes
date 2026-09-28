@@ -25,6 +25,16 @@ export async function upsertEquipment(
   return payload;
 }
 
+/** Sobrescreve o documento inteiro — campos opcionais vazios são removidos. */
+export async function replaceEquipment(
+  db: Firestore,
+  equipment: Equipment,
+): Promise<Equipment> {
+  const payload = omitUndefined({ ...equipment }) as Equipment;
+  await setDoc(doc(equipmentCol(db), equipment.id), payload);
+  return payload;
+}
+
 /** Grava e limpa campos de parada (merge sozinho não remove undefined). */
 export async function upsertEquipmentClearingStop(
   db: Firestore,

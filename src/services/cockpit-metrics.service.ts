@@ -780,9 +780,11 @@ export async function getCockpitMetrics(db: Firestore): Promise<{
       const lineRank = (t: EquipmentType): number => {
         if (t === "MIXER") return 0;
         if (t === "MODELER") return 1;
-        if (t === "PROOFING_CHAMBER") return 2;
-        if (t === "OVEN") return 3;
-        if (t === "PACKAGING_LINE") return 4;
+        if (t === "TRAYING_STATION") return 2;
+        if (t === "PROOFING_CHAMBER") return 3;
+        if (t === "OVEN") return 4;
+        if (t === "COOLING_RACK") return 5;
+        if (t === "PACKAGING_LINE") return 6;
         return 9;
       };
       return lineRank(a.type) - lineRank(b.type) || a.code.localeCompare(b.code);

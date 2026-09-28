@@ -6,10 +6,7 @@ import {
 } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/firebase/collections";
 import { omitUndefined } from "@/lib/firestore/omit-undefined";
-import {
-  cloneDefaultProcessRoute,
-  resolveProcessRoute,
-} from "@/domain/production/process-route";
+import { resolveRouteForProduct } from "@/services/process-settings.service";
 import {
   getProductionOrder,
 } from "@/repositories/orders.repository";
@@ -86,9 +83,7 @@ export async function releaseProductionOrder(
 
   const now = new Date().toISOString();
   const product = await getProductById(db, order.productId);
-  const processRoute = resolveProcessRoute(
-    product?.processRoute ?? cloneDefaultProcessRoute(),
-  );
+  const processRoute = await resolveRouteForProduct(db, product);
   const firstStep = processRoute[0];
   if (!firstStep) {
     throw new Error("Rota de processo vazia — configure o produto.");

@@ -4,9 +4,12 @@ import type { StepType } from "@/types/production";
 export type EquipmentType =
   | "MIXER"
   | "MODELER"
+  | "TRAYING_STATION"
   | "PROOFING_CHAMBER"
   | "OVEN"
-  | "PACKAGING_LINE";
+  | "COOLING_RACK"
+  | "PACKAGING_LINE"
+  | "OTHER";
 
 /**
  * Estados propostos no Doc 04 — validar com operação.
@@ -20,6 +23,14 @@ export type EquipmentStatus =
   | "MAINTENANCE"
   | "UNAVAILABLE";
 
+export type EquipmentCapacityUnit =
+  | "KG"
+  | "KG_PER_HOUR"
+  | "UNITS"
+  | "UNITS_PER_HOUR"
+  | "TRAYS"
+  | "RACKS";
+
 export interface Equipment {
   id: string;
   code: string;
@@ -31,6 +42,17 @@ export interface Equipment {
   applicableStepTypes: StepType[];
   status: EquipmentStatus;
   active: boolean;
+  /** Capacidade nominal por ciclo/hora, conforme a unidade. */
+  capacity?: number;
+  capacityUnit?: EquipmentCapacityUnit;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  /** Data de instalação (YYYY-MM-DD). */
+  installedAt?: string;
+  powerKw?: number;
+  location?: string;
+  notes?: string;
   /** Início da parada atual (Doc 09 — tempo parado). */
   stoppedAt?: string;
   /** Motivo livre V1 — catálogo oficial de parada depois. */

@@ -9,12 +9,9 @@ import {
 } from "firebase/firestore";
 import { COLLECTIONS, productionOrderDocId } from "@/lib/firebase/collections";
 import { omitUndefined } from "@/lib/firestore/omit-undefined";
-import {
-  cloneDefaultProcessRoute,
-  resolveProcessRoute,
-  type ProcessRouteStep,
-} from "@/domain/production/process-route";
+import type { ProcessRouteStep } from "@/domain/production/process-route";
 import { MOCK_SOURCE_SYSTEM } from "@/integrations/production-orders/fixtures/mock-orders";
+import { resolveRouteForProduct } from "@/services/process-settings.service";
 import { seedFactoryEquipment } from "@/services/seed-equipment.service";
 import { syncProductionOrders } from "@/services/production-order-sync.service";
 import { buildDemoLotCode } from "@/services/release-order.service";
@@ -414,9 +411,7 @@ export async function resetAndSeedDemoProduction(
     if (!order?.productId) continue;
 
     const product = await getProductById(db, plan.productId);
-    const route = resolveProcessRoute(
-      product?.processRoute ?? cloneDefaultProcessRoute(),
-    );
+    const route = await resolveRouteForProduct(db, product);
 
     const lot = await createDemoLot(db, order, plan, route, now);
     lotCodes.push(lot.lotCode);

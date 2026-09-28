@@ -21,6 +21,7 @@ import {
   upsertProduct,
 } from "@/repositories/products.repository";
 import { listActiveLots } from "@/repositories/lots.repository";
+import { resolveRouteForProduct } from "@/services/process-settings.service";
 import type {
   ProcessRouteStep,
   Product,
@@ -73,7 +74,7 @@ export function ProductDetailClient({ productId }: { productId: string }) {
           return;
         }
         setProduct(found);
-        setRouteDraft(resolveProcessRoute(found.processRoute));
+        setRouteDraft(await resolveRouteForProduct(db, found));
         setMappings(
           allMappings.filter((m) => m.productId === found.id && m.active),
         );
@@ -241,7 +242,7 @@ export function ProductDetailClient({ productId }: { productId: string }) {
             value={
               product.processRoute?.length
                 ? "Configurada neste produto"
-                : "Usando padrão da fábrica"
+                : "Usando padrão da fábrica (Configurações › Estações)"
             }
           />
         </dl>
