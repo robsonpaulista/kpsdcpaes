@@ -25,6 +25,9 @@ const PAGE_TITLES: ReadonlyArray<{ match: (path: string) => boolean; title: stri
     title: "Detalhe do produto",
   },
   { match: (p) => p.startsWith("/app/products"), title: "Produtos" },
+  { match: (p) => p.startsWith("/app/equipment/overview"), title: "Equipamentos · Indicadores" },
+  { match: (p) => p.startsWith("/app/equipment/maintenance"), title: "Manutenções" },
+  { match: (p) => p.startsWith("/app/equipment/downtime"), title: "Paradas" },
   {
     match: (p) => p.startsWith("/app/equipment/") && p !== "/app/equipment",
     title: "Detalhe do equipamento",

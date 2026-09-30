@@ -12,6 +12,8 @@ export const COLLECTIONS = {
   productionEvents: "factory_production_events",
   qualityIncidents: "factory_quality_incidents",
   equipment: "factory_equipment",
+  equipmentDowntimes: "factory_equipment_downtimes",
+  equipmentMaintenance: "factory_equipment_maintenance",
   lossReasons: "factory_loss_reasons",
   processSettings: "factory_process_settings",
   integrationRuns: "factory_integration_runs",

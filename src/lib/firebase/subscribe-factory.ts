@@ -20,6 +20,8 @@ export function subscribeFactoryData(
     onSnapshot(collection(db, COLLECTIONS.qualityIncidents), onChange),
     onSnapshot(collection(db, COLLECTIONS.productionOrders), onChange),
     onSnapshot(collection(db, COLLECTIONS.equipment), onChange),
+    onSnapshot(collection(db, COLLECTIONS.equipmentDowntimes), onChange),
+    onSnapshot(collection(db, COLLECTIONS.equipmentMaintenance), onChange),
     onSnapshot(collection(db, COLLECTIONS.integrationState), onChange),
   ];
   return () => {

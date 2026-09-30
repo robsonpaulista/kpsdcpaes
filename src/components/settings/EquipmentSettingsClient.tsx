@@ -20,9 +20,7 @@ import {
 } from "@/lib/labels/equipment";
 import { listEquipment } from "@/repositories/equipment.repository";
 import {
-  releaseEquipment,
   saveEquipmentProfile,
-  stopEquipment,
   type EquipmentProfileInput,
 } from "@/services/equipment-ops.service";
 import { seedFactoryEquipment } from "@/services/seed-equipment.service";
@@ -43,9 +41,6 @@ export function EquipmentSettingsClient() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [stopReasonDraft, setStopReasonDraft] = useState<Record<string, string>>(
-    {},
-  );
   /** "new" = cadastro novo; id = edição inline daquele equipamento. */
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -98,22 +93,6 @@ export function EquipmentSettingsClient() {
     }
   }
 
-  async function handleStop(eq: Equipment) {
-    setBusy(true);
-    setMessage(null);
-    setError(null);
-    try {
-      await stopEquipment(getFirestoreDb(), eq.id, stopReasonDraft[eq.id]);
-      setMessage(`${eq.code} marcado como PARADO.`);
-      setStopReasonDraft((prev) => ({ ...prev, [eq.id]: "" }));
-      await load({ silent: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao parar");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleSaveProfile(
     input: EquipmentProfileInput,
     equipmentId?: string,
@@ -141,27 +120,12 @@ export function EquipmentSettingsClient() {
     }
   }
 
-  async function handleRelease(eq: Equipment) {
-    setBusy(true);
-    setMessage(null);
-    setError(null);
-    try {
-      await releaseEquipment(getFirestoreDb(), eq.id);
-      setMessage(`${eq.code} liberado (DISPONÍVEL).`);
-      await load({ silent: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao liberar");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <CockpitPageHeader
         eyebrow="Catálogo"
         title="Equipamentos · cadastro"
-        description="Cadastro com capacidade e informações gerais. Parada operacional também na visão do chão."
+        description="Cadastro com capacidade e informações gerais. Paradas e manutenções ficam em Equipamentos."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/app/settings" className="dc-btn-secondary h-10 px-3 text-sm">
@@ -264,18 +228,6 @@ export function EquipmentSettingsClient() {
             const station = eq.stationId
               ? getStation(eq.stationId)
               : undefined;
-            const canStop =
-              canManage &&
-              eq.active &&
-              eq.status !== "STOPPED" &&
-              eq.status !== "OPERATING" &&
-              eq.status !== "MAINTENANCE" &&
-              eq.status !== "UNAVAILABLE";
-            const canRelease =
-              canManage &&
-              (eq.status === "STOPPED" ||
-                eq.status === "MAINTENANCE" ||
-                eq.status === "UNAVAILABLE");
             const capacityLabel = formatEquipmentCapacity(eq);
             const generalInfo: Array<{ label: string; value: string }> = [
               capacityLabel ? { label: "Capacidade", value: capacityLabel } : null,
@@ -390,51 +342,14 @@ export function EquipmentSettingsClient() {
                   </p>
                 )}
 
-                {canStop ? (
-                  <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-dc-border/60 pt-4">
-                    <label className="min-w-[12rem] flex-1 text-xs text-dc-text-muted">
-                      Motivo da parada (opcional)
-                      <input
-                        value={stopReasonDraft[eq.id] ?? ""}
-                        onChange={(e) =>
-                          setStopReasonDraft((prev) => ({
-                            ...prev,
-                            [eq.id]: e.target.value,
-                          }))
-                        }
-                        placeholder="Ex.: falha registrada"
-                        className="mt-1 h-10 w-full rounded-[12px] border border-dc-border bg-dc-bg px-3 text-sm outline-none focus:border-dc-orange"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void handleStop(eq)}
-                      className="h-10 rounded-[12px] border border-danger/40 px-3 text-xs font-semibold text-danger disabled:opacity-50"
-                    >
-                      Registrar parada
-                    </button>
-                  </div>
-                ) : null}
-
-                {canRelease ? (
-                  <div className="mt-4 border-t border-dc-border/60 pt-4">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void handleRelease(eq)}
-                      className="dc-btn-primary h-10 px-3 text-xs disabled:opacity-50"
-                    >
-                      Liberar equipamento
-                    </button>
-                  </div>
-                ) : null}
-
-                {eq.status === "OPERATING" ? (
-                  <p className="mt-3 text-xs text-dc-text-muted">
-                    Em uso no Floor — finalize a etapa antes de registrar parada.
-                  </p>
-                ) : null}
+                <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                  <Link
+                    href={`/app/equipment/${encodeURIComponent(eq.id)}`}
+                    className="font-medium text-dc-orange"
+                  >
+                    Paradas e manutenções →
+                  </Link>
+                </div>
               </li>
             );
           })}

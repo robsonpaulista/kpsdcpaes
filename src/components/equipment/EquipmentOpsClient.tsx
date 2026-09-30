@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccessDeniedNote } from "@/components/access/AccessDeniedNote";
+import { EquipmentSubnav } from "@/components/equipment/EquipmentSubnav";
+import { StopEquipmentForm } from "@/components/equipment/StopEquipmentForm";
 import { ProductThumbnail } from "@/components/shared/ProductThumbnail";
 import { CockpitPageHeader } from "@/components/shared/CockpitUi";
 import {
@@ -10,7 +12,6 @@ import {
   Button,
   Card,
   EmptyState,
-  Input,
   SegmentedControl,
   StatTile,
   StatusBadge,
@@ -26,6 +27,11 @@ import {
   equipmentTypeLabel,
 } from "@/lib/labels/equipment";
 import {
+  downtimeCategoryLabel,
+  isMaintenanceOverdue,
+} from "@/lib/labels/maintenance";
+import { formatDateBr } from "@/lib/format/date";
+import {
   formatDurationClock,
   remainingMs,
   timingToneClass,
@@ -33,15 +39,18 @@ import {
 import { buildProductMaps } from "@/lib/products/product-maps";
 import { listOpenStepRuns } from "@/repositories/execution.repository";
 import { listEquipment } from "@/repositories/equipment.repository";
+import { listMaintenance } from "@/repositories/equipment-maintenance.repository";
 import { listActiveLots } from "@/repositories/lots.repository";
 import { listProductionOrders } from "@/repositories/orders.repository";
 import { listProducts } from "@/repositories/products.repository";
+import { nextMaintenanceByEquipment } from "@/services/equipment-management.service";
 import {
   releaseEquipment,
   stopEquipment,
+  type StopEquipmentInput,
 } from "@/services/equipment-ops.service";
 import { computeTimingStatus } from "@/services/workflow.service";
-import type { Equipment } from "@/types/equipment";
+import type { Equipment, EquipmentMaintenance } from "@/types/equipment";
 import type { StepType, TimingStatus } from "@/types/production";
 
 type Filter = "all" | "operating" | "stopped" | "available";
@@ -78,20 +87,21 @@ function formatUnits(value: number | null | undefined): string {
  * Visão operacional Doc 02 §67 — status do chão, não cadastro.
  */
 export function EquipmentOpsClient() {
-  const { can } = useFactoryRole();
+  const { can, profile } = useFactoryRole();
   const canManage = can("manageEquipment");
+  const actor = profile?.email ?? profile?.uid;
   const [items, setItems] = useState<Equipment[]>([]);
   const [runByEquipment, setRunByEquipment] = useState<
     Record<string, EquipmentRun>
   >({});
+  const [nextMaintenance, setNextMaintenance] = useState<
+    Map<string, EquipmentMaintenance>
+  >(() => new Map());
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [stopReasonDraft, setStopReasonDraft] = useState<
-    Record<string, string>
-  >({});
   const [tick, setTick] = useState(0);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
@@ -100,14 +110,17 @@ export function EquipmentOpsClient() {
     try {
       if (!isFirebaseConfigured()) throw new Error("Firebase não configurado.");
       const db = getFirestoreDb();
-      const [equipment, steps, lots, products, orders] = await Promise.all([
-        listEquipment(db),
-        listOpenStepRuns(db),
-        listActiveLots(db),
-        listProducts(db),
-        listProductionOrders(db),
-      ]);
+      const [equipment, steps, lots, products, orders, maintenance] =
+        await Promise.all([
+          listEquipment(db),
+          listOpenStepRuns(db),
+          listActiveLots(db),
+          listProducts(db),
+          listProductionOrders(db),
+          listMaintenance(db),
+        ]);
       setItems(equipment.filter((e) => e.active));
+      setNextMaintenance(nextMaintenanceByEquipment(maintenance));
 
       const maps = buildProductMaps(products);
       const lotById = new Map(lots.map((l) => [l.id, l]));
@@ -208,17 +221,21 @@ export function EquipmentOpsClient() {
     return items;
   }, [items, filter, isOperating, runByEquipment]);
 
-  async function handleStop(eq: Equipment) {
+  async function handleStop(
+    eq: Equipment,
+    input: Omit<StopEquipmentInput, "actor">,
+  ): Promise<boolean> {
     setBusyId(eq.id);
     setMessage(null);
     setError(null);
     try {
-      await stopEquipment(getFirestoreDb(), eq.id, stopReasonDraft[eq.id]);
+      await stopEquipment(getFirestoreDb(), eq.id, { ...input, actor });
       setMessage(`${eq.code} marcado como PARADO.`);
-      setStopReasonDraft((prev) => ({ ...prev, [eq.id]: "" }));
       await load({ silent: true });
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao parar");
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -229,7 +246,7 @@ export function EquipmentOpsClient() {
     setMessage(null);
     setError(null);
     try {
-      await releaseEquipment(getFirestoreDb(), eq.id);
+      await releaseEquipment(getFirestoreDb(), eq.id, { actor });
       setMessage(`${eq.code} liberado (DISPONÍVEL).`);
       await load({ silent: true });
     } catch (err) {
@@ -247,10 +264,12 @@ export function EquipmentOpsClient() {
         description="Status operacional · parada tira o recurso da fila do Floor."
         actions={
           <Button href="/app/settings/equipment" variant="secondary" size="sm">
-            Cadastro / semear →
+            Cadastro →
           </Button>
         }
       />
+
+      <EquipmentSubnav />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatTile label="Operando" value={counts.operating} tone="ink" />
@@ -303,11 +322,14 @@ export function EquipmentOpsClient() {
               !isOperating(eq) &&
               eq.status !== "MAINTENANCE" &&
               eq.status !== "UNAVAILABLE";
+            const inMaintenance = Boolean(eq.currentMaintenanceId);
             const canRelease =
               canManage &&
+              !inMaintenance &&
               (eq.status === "STOPPED" ||
                 eq.status === "MAINTENANCE" ||
                 eq.status === "UNAVAILABLE");
+            const upcoming = nextMaintenance.get(eq.id);
             const stopped =
               eq.status === "STOPPED" ||
               eq.status === "MAINTENANCE" ||
@@ -415,37 +437,47 @@ export function EquipmentOpsClient() {
                     </div>
                   ) : null}
 
-                  {eq.stopReason ? (
+                  {eq.stopCategory || eq.stopReason ? (
                     <p className="mt-2 text-xs text-[var(--muted)]">
-                      Motivo: {eq.stopReason}
+                      {eq.stopCategory
+                        ? downtimeCategoryLabel(eq.stopCategory)
+                        : "Motivo"}
+                      {eq.stopReason ? `: ${eq.stopReason}` : ""}
+                    </p>
+                  ) : null}
+
+                  {upcoming ? (
+                    <p
+                      className={`mt-2 text-xs ${
+                        isMaintenanceOverdue(upcoming)
+                          ? "font-semibold text-[var(--critical)]"
+                          : "text-[var(--ink-2)]"
+                      }`}
+                    >
+                      {isMaintenanceOverdue(upcoming)
+                        ? "Manutenção atrasada"
+                        : "Próxima manutenção"}
+                      : {upcoming.title} · {formatDateBr(upcoming.scheduledDate)}
                     </p>
                   ) : null}
 
                   {canManage ? (
                     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
                       {canStop ? (
-                        <>
-                          <Input
-                            type="text"
-                            placeholder="Motivo (opcional)"
-                            value={stopReasonDraft[eq.id] ?? ""}
-                            onChange={(e) =>
-                              setStopReasonDraft((prev) => ({
-                                ...prev,
-                                [eq.id]: e.target.value,
-                              }))
-                            }
-                            className="min-w-[10rem] flex-1 text-xs"
-                          />
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            disabled={busyId === eq.id}
-                            onClick={() => void handleStop(eq)}
-                          >
-                            Parar
-                          </Button>
-                        </>
+                        <StopEquipmentForm
+                          compact
+                          busy={busyId === eq.id}
+                          onStop={(input) => handleStop(eq, input)}
+                        />
+                      ) : null}
+                      {inMaintenance ? (
+                        <Button
+                          href="/app/equipment/maintenance"
+                          variant="secondary"
+                          size="sm"
+                        >
+                          Em manutenção · concluir →
+                        </Button>
                       ) : null}
                       {canRelease ? (
                         <Button

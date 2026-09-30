@@ -174,6 +174,18 @@ service cloud.firestore {
       allow write: if canManageEquipment();
     }
 
+    /** Histórico de paradas de equipamento */
+    match /factory_equipment_downtimes/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canManageEquipment();
+    }
+
+    /** Manutenções (agenda + histórico) */
+    match /factory_equipment_maintenance/{docId} {
+      allow read: if hasActiveProfile();
+      allow write: if canManageEquipment();
+    }
+
     /** Tempos padrão por etapa (configurados em Estações) */
     match /factory_process_settings/{docId} {
       allow read: if hasActiveProfile();

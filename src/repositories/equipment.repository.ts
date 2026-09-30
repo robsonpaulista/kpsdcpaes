@@ -35,31 +35,31 @@ export async function replaceEquipment(
   return payload;
 }
 
+const STOP_FIELDS = [
+  "stoppedAt",
+  "stopReason",
+  "stopCategory",
+  "currentDowntimeId",
+  "currentMaintenanceId",
+] as const satisfies ReadonlyArray<keyof Equipment>;
+
 /** Grava e limpa campos de parada (merge sozinho não remove undefined). */
 export async function upsertEquipmentClearingStop(
   db: Firestore,
   equipment: Equipment,
 ): Promise<Equipment> {
-  const { stoppedAt: _a, stopReason: _b, ...rest } = equipment;
-  const payload = omitUndefined({
-    ...rest,
-    status: equipment.status,
-    updatedAt: equipment.updatedAt,
-  }) as Record<string, unknown>;
+  const cleared: Equipment = { ...equipment };
+  for (const field of STOP_FIELDS) delete cleared[field];
+  const payload = omitUndefined({ ...cleared }) as Record<string, unknown>;
+  const deletes = Object.fromEntries(
+    STOP_FIELDS.map((field) => [field, deleteField()]),
+  );
   await setDoc(
     doc(equipmentCol(db), equipment.id),
-    {
-      ...payload,
-      stoppedAt: deleteField(),
-      stopReason: deleteField(),
-    },
+    { ...payload, ...deletes },
     { merge: true },
   );
-  return {
-    ...rest,
-    status: equipment.status,
-    updatedAt: equipment.updatedAt,
-  };
+  return cleared;
 }
 export async function getEquipmentById(
   db: Firestore,
